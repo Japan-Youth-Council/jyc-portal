@@ -1,0 +1,21 @@
+name: Mirror to Personal Repo
+
+on:
+  push:
+    branches:
+      - main  # ← もしメインのブランチ名が master の場合は master に書き換えてください
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Push to Personal Repo
+        env:
+          # ★↓ ここを書き換える（GITHUB_USERNAME と REPOSITORY_NAME の部分）
+          TARGET_REPO: https://${{ secrets.MIRROR_TOKEN }}@github.com/lindsay-yamagishi/jyc-portal-deploy.git
+        run: |
+          git push --force $TARGET_REPO HEAD:main
