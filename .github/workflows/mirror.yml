@@ -3,7 +3,7 @@ name: Mirror to Personal Repo
 on:
   push:
     branches:
-      - main  # ※メインブランチ名が master の場合は master に変更してください
+      - main
 
 jobs:
   mirror:
@@ -12,10 +12,8 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      
+
       - name: Push to Personal Repo
-        env:
-          TOKEN: ${{ secrets.MIRROR_TOKEN }}
         run: |
-          git push --force "https://${TOKEN}@github.com/lindsay-yamagishi/jyc-portal-deploy.git" HEAD:main
-          //test
+          git remote add target https://lindsay-yamagishi:${{ secrets.MIRROR_TOKEN }}@github.com/lindsay-yamagishi/jyc-portal-deploy.git
+          git push --force target HEAD:main
