@@ -18,3 +18,4 @@ jobs:
           TOKEN: ${{ secrets.MIRROR_TOKEN }}
         run: |
           git push --force "https://${TOKEN}@github.com/lindsay-yamagishi/jyc-portal-deploy.git" HEAD:main
+          //test
