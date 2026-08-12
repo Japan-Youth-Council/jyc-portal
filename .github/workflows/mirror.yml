@@ -3,7 +3,7 @@ name: Mirror to Personal Repo
 on:
   push:
     branches:
-      - main  # ← もしメインのブランチ名が master の場合は master に書き換えてください
+      - main  # ※メインブランチ名が master の場合は master に変更してください
 
 jobs:
   mirror:
@@ -15,7 +15,6 @@ jobs:
       
       - name: Push to Personal Repo
         env:
-          # ★↓ ここを書き換える（GITHUB_USERNAME と REPOSITORY_NAME の部分）
-          TARGET_REPO: https://${{ secrets.MIRROR_TOKEN }}@github.com/lindsay-yamagishi/jyc-portal-deploy.git
+          TOKEN: ${{ secrets.MIRROR_TOKEN }}
         run: |
-          git push --force $TARGET_REPO HEAD:main
+          git push --force "https://${TOKEN}@github.com/lindsay-yamagishi/jyc-portal-deploy.git" HEAD:main
