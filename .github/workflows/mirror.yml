@@ -12,18 +12,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
-      # ★原因調査用のステップを追加
-      - name: Debug Token Secret
-        env:
-          MY_TOKEN: ${{ secrets.MIRROR_TOKEN }}
-        run: |
-          if [ -z "$MY_TOKEN" ]; then
-            echo "【エラー】 MIRROR_TOKEN が空っぽです。Secretsに正しく登録されていないか、名前が間違っています。"
-            exit 1
-          else
-            echo "【OK】 トークンはセットされています（文字数: ${#MY_TOKEN}文字）"
-          fi
+          persist-credentials: false # ★ここを追加！勝手に別のパスワードがセットされるのを防ぎます
 
       - name: Push to Personal Repo
         env:
