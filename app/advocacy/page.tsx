@@ -4,9 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { MoreVertical, Trash2, GitMerge, Plus, Edit2, User, FileText, Link as LinkIcon, Building2, MapPin, Check, X, Search, ChevronDown, ChevronRight } from 'lucide-react';
 
-// 型定義
+// ★修正: 「Record」という名前がTypeScriptの標準機能と被っていたため、「AdvocacyRecord」に変更
 type Target = { id: number; category: string; region: string | null; name: string; sort_order: number };
-type Record = { id: number; target_id: number; date: string; title: string; content: string; jyc_attendees: string; target_attendees: string[]; linked_target_ids: number[]; document_url: string; minutes_url: string; author_name: string; created_at: string };
+type AdvocacyRecord = { id: number; target_id: number; date: string; title: string; content: string; jyc_attendees: string; target_attendees: string[]; linked_target_ids: number[]; document_url: string; minutes_url: string; author_name: string; created_at: string };
 
 const CATEGORIES = ['国政', '中央行政', '地方', '対個人', 'その他'];
 
@@ -15,23 +15,23 @@ export default function AdvocacyPage() {
   const [currentAuthorName, setCurrentAuthorName] = useState('');
 
   const [targets, setTargets] = useState<Target[]>([]);
-  const [records, setRecords] = useState<Record[]>([]);
+  const [records, setRecords] = useState<AdvocacyRecord[]>([]); // ★変更
   const [activeTarget, setActiveTarget] = useState<Target | null>(null);
   
-  // 折りたたみ状態管理
+  // 折りたたみ状態管理 (ここにある標準のRecord機能が名前被りでエラーを起こしていました)
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({'国政': true, '中央行政': true, '地方': true, '対個人': true, 'その他': true});
   const [openRegions, setOpenRegions] = useState<Record<string, boolean>>({});
 
   // 検索用State
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Record[]>([]);
+  const [searchResults, setSearchResults] = useState<AdvocacyRecord[]>([]); // ★変更
 
   // UI状態
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTargetId, setEditingTargetId] = useState<number | null>(null);
   const [menuTargetId, setMenuTargetId] = useState<number | null>(null);
   const [mergeData, setMergeData] = useState<{ from: number; to: number | null } | null>(null);
-  const [formData, setFormData] = useState<Partial<Record>>({});
+  const [formData, setFormData] = useState<Partial<AdvocacyRecord>>({}); // ★変更
   
   // 相手方出席者（サジェスト用）
   const [targetAttendees, setTargetAttendees] = useState<string[]>([]);
@@ -214,7 +214,7 @@ export default function AdvocacyPage() {
     if (searchQuery) setSearchResults(searchResults.filter(r => r.id !== id));
   };
 
-  const openForm = (record?: Record) => {
+  const openForm = (record?: AdvocacyRecord) => { // ★変更
     if (record) {
       setFormData(record);
       setTargetAttendees(record.target_attendees || []);
@@ -289,7 +289,7 @@ export default function AdvocacyPage() {
   );
 
   // 共通コンポーネント: 履歴レコードカード
-  const renderRecordCard = (record: Record, isSearchResult = false) => {
+  const renderRecordCard = (record: AdvocacyRecord, isSearchResult = false) => { // ★変更
     const targetInfo = targets.find(t => t.id === record.target_id);
 
     return (
@@ -370,7 +370,7 @@ export default function AdvocacyPage() {
         <div className="p-3">
           {CATEGORIES.map(cat => {
             const catTargets = targets.filter(t => t.category === cat);
-            if (catTargets.length === 0 && cat !== '国政') return null; // 空のカテゴリは非表示（国政は常に表示）
+            if (catTargets.length === 0 && cat !== '国政') return null;
 
             return (
               <div key={cat} className="mb-2">
