@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { MoreVertical, Trash2, GitMerge, Plus, Edit2, User, FileText, Link as LinkIcon, Building2, MapPin, X, Search, ChevronDown, ChevronRight, Globe } from 'lucide-react'; // Checkアイコンを削除しました
+import { MoreVertical, Trash2, GitMerge, Plus, Edit2, User, FileText, Link as LinkIcon, Building2, MapPin, X, Search, ChevronDown, ChevronRight, Globe, PanelLeft } from 'lucide-react'; // ★ Menu を PanelLeft に変更
 
 type Target = { id: number; category: string; region: string | null; name: string; sort_order: number };
 type ContactRecord = { id: number; target_id: number; date: string; title: string; content: string; jyc_attendees: string; target_attendees: string[]; linked_target_ids: number[]; document_urls: string[]; minutes_url: string; hp_article_url: string; author_name: string; created_at: string };
@@ -23,6 +23,8 @@ export default function ContactsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ContactRecord[]>([]);
 
+  // スマホ用サイドバーの開閉状態
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTargetId, setEditingTargetId] = useState<number | null>(null);
   const [menuTargetId, setMenuTargetId] = useState<number | null>(null);
@@ -280,11 +282,20 @@ export default function ContactsPage() {
           className="w-full border p-1 text-sm rounded outline-none"
         />
       ) : (
-        <span onClick={() => { setActiveTarget(target); setSearchQuery(''); }} className="flex-1 truncate text-sm">{target.name}</span>
+        <span 
+          onClick={() => { 
+            setActiveTarget(target); 
+            setSearchQuery(''); 
+            setIsMobileSidebarOpen(false);
+          }} 
+          className="flex-1 truncate text-sm py-1"
+        >
+          {target.name}
+        </span>
       )}
 
       <div className="relative">
-        <button onClick={(e) => { e.stopPropagation(); setMenuTargetId(menuTargetId === target.id ? null : target.id); }} className="p-1 opacity-0 group-hover:opacity-100 hover:bg-gray-200 rounded">
+        <button onClick={(e) => { e.stopPropagation(); setMenuTargetId(menuTargetId === target.id ? null : target.id); }} className="p-1 opacity-0 md:opacity-100 group-hover:opacity-100 hover:bg-gray-200 rounded">
           <MoreVertical className="w-4 h-4 text-gray-500" />
         </button>
         
@@ -304,33 +315,31 @@ export default function ContactsPage() {
 
     return (
       <div key={record.id} className="relative pl-6 md:pl-8 group">
-        
-        {/* ★変更: クリックできそうなアイコンから、シンプルなドットの装飾に変更 */}
         <div className="absolute w-4 h-4 bg-blue-300 rounded-full border-[3px] border-gray-50 -left-[9px] top-1.5 z-10"></div>
         
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition">
+        <div className="bg-white p-4 md:p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition">
           <div className="flex justify-between items-start mb-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">{record.date}</span>
+              <span className="text-xs md:text-sm font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">{record.date}</span>
               
               {isSearchResult && targetInfo && (
                 <span 
                   onClick={() => { setActiveTarget(targetInfo); setSearchQuery(''); }}
-                  className="text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 border px-2 py-1 rounded cursor-pointer transition flex items-center gap-1"
+                  className="text-[10px] md:text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 border px-2 py-1 rounded cursor-pointer transition flex items-center gap-1"
                 >
                   {targetInfo.category === '個人' ? <User className="w-3 h-3"/> : <Building2 className="w-3 h-3"/>}
-                  {targetInfo.name}
+                  <span className="truncate max-w-[100px] md:max-w-none">{targetInfo.name}</span>
                 </span>
               )}
             </div>
 
-            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition">
-              <button onClick={() => { setActiveTarget(targetInfo || null); openForm(record); }} className="p-1 hover:bg-gray-100 rounded text-gray-400"><Edit2 className="w-4 h-4"/></button>
-              <button onClick={() => handleDeleteRecord(record.id)} className="p-1 hover:bg-red-50 rounded text-red-400"><Trash2 className="w-4 h-4"/></button>
+            <div className="flex gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition">
+              <button onClick={() => { setActiveTarget(targetInfo || null); openForm(record); }} className="p-1.5 md:p-1 hover:bg-gray-100 rounded text-gray-400"><Edit2 className="w-4 h-4"/></button>
+              <button onClick={() => handleDeleteRecord(record.id)} className="p-1.5 md:p-1 hover:bg-red-50 rounded text-red-400"><Trash2 className="w-4 h-4"/></button>
             </div>
           </div>
           
-          <h3 className="font-bold text-gray-800 text-lg mb-3">{record.title}</h3>
+          <h3 className="font-bold text-gray-800 text-base md:text-lg mb-3 leading-snug">{record.title}</h3>
           {record.content && <p className="text-gray-600 text-sm whitespace-pre-wrap leading-relaxed mb-4">{record.content}</p>}
 
           <div className="bg-gray-50 p-3 rounded-lg text-xs space-y-2 mb-4 border border-gray-100">
@@ -344,33 +353,49 @@ export default function ContactsPage() {
             <div className="flex items-start gap-2"><span className="font-bold text-gray-500 w-16 shrink-0">JYC出席:</span><span className="text-gray-700">{record.jyc_attendees || '記載なし'}</span></div>
           </div>
 
-          <div className="flex gap-4 text-sm flex-wrap">
+          <div className="flex gap-3 text-sm flex-wrap">
             {record.document_urls && record.document_urls.length > 0 && record.document_urls.map((url, idx) => (
-              <a key={idx} href={url} target="_blank" className="flex items-center gap-1 text-blue-600 hover:underline">
-                <FileText className="w-4 h-4" /> 資料 {record.document_urls.length > 1 ? idx + 1 : ''}
+              <a key={idx} href={url} target="_blank" className="flex items-center gap-1 text-blue-600 hover:underline bg-blue-50 px-2 py-1 rounded md:bg-transparent md:p-0 md:rounded-none">
+                <FileText className="w-3.5 h-3.5" /> 資料 {record.document_urls.length > 1 ? idx + 1 : ''}
               </a>
             ))}
-            {record.minutes_url && <a href={record.minutes_url} target="_blank" className="flex items-center gap-1 text-green-600 hover:underline"><LinkIcon className="w-4 h-4" /> 議事録</a>}
+            {record.minutes_url && <a href={record.minutes_url} target="_blank" className="flex items-center gap-1 text-green-600 hover:underline bg-green-50 px-2 py-1 rounded md:bg-transparent md:p-0 md:rounded-none"><LinkIcon className="w-3.5 h-3.5" /> 議事録</a>}
             
             {record.hp_article_url && (
-              <a href={record.hp_article_url} target="_blank" className="flex items-center gap-1 text-orange-600 hover:underline">
-                <Globe className="w-4 h-4" /> HP記事
+              <a href={record.hp_article_url} target="_blank" className="flex items-center gap-1 text-orange-600 hover:underline bg-orange-50 px-2 py-1 rounded md:bg-transparent md:p-0 md:rounded-none">
+                <Globe className="w-3.5 h-3.5" /> HP記事
               </a>
             )}
           </div>
-          <div className="text-right mt-2 text-xs text-gray-400">記録者: {record.author_name}</div>
+          <div className="text-right mt-3 text-xs text-gray-400">記録者: {record.author_name}</div>
         </div>
       </div>
     );
   };
 
   return (
-    <div className="flex h-[calc(100vh-61px)] bg-gray-50 text-gray-800">
-      <aside className="w-72 bg-white border-r flex flex-col overflow-y-auto">
-        <div className="p-4 border-b bg-gray-50 space-y-3 sticky top-0 z-10">
-          <div className="flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-gray-500" />
-            <h2 className="font-bold text-gray-700">コンタクト先リスト</h2>
+    <div className="flex h-[calc(100dvh-64px)] md:h-[calc(100vh-61px)] bg-gray-50 text-gray-800 relative overflow-hidden">
+      
+      {/* スマホ用 サイドバー背景 */}
+      {isMobileSidebarOpen && (
+        <div 
+          className="md:hidden absolute inset-0 bg-black/40 z-40 backdrop-blur-sm transition-opacity"
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+      )}
+
+      {/* 左サイドバー */}
+      <aside className={`absolute md:relative inset-y-0 left-0 z-50 w-72 bg-white border-r flex flex-col transition-transform duration-300 ease-in-out shadow-xl md:shadow-none ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+        <div className="p-4 border-b bg-gray-50 space-y-3 sticky top-0 z-10 flex flex-col justify-between h-auto">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-gray-500" />
+              <h2 className="font-bold text-gray-700">コンタクト先リスト</h2>
+            </div>
+            {/* 閉じるボタン */}
+            <button className="md:hidden p-1 text-gray-400 hover:bg-gray-200 rounded" onClick={() => setIsMobileSidebarOpen(false)}>
+              <X className="w-5 h-5" />
+            </button>
           </div>
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-400" />
@@ -378,23 +403,26 @@ export default function ContactsPage() {
               type="text" 
               placeholder="全履歴から検索 (件名等)..." 
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={e => {
+                setSearchQuery(e.target.value);
+                if (e.target.value.trim() !== '') setIsMobileSidebarOpen(false);
+              }}
               className="w-full pl-8 pr-3 py-2 border rounded-md text-sm outline-none focus:border-blue-500 shadow-sm"
             />
           </div>
         </div>
         
-        <div className="p-3">
+        <div className="p-3 overflow-y-auto flex-1 pb-20">
           {CATEGORIES.map(cat => {
             const catTargets = targets.filter(t => t.category === cat);
             return (
               <div key={cat} className="mb-2">
                 <div className="flex items-center justify-between group mb-1 cursor-pointer" onClick={() => toggleCategory(cat)}>
-                  <h3 className="text-sm font-bold text-gray-600 flex items-center gap-1 hover:text-gray-800 transition">
+                  <h3 className="text-sm font-bold text-gray-600 flex items-center gap-1 hover:text-gray-800 transition py-1">
                     {openCategories[cat] ? <ChevronDown className="w-4 h-4 text-gray-400"/> : <ChevronRight className="w-4 h-4 text-gray-400"/>}
                     {cat === '個人' ? <User className="w-4 h-4"/> : <MapPin className="w-4 h-4"/>} {cat}
                   </h3>
-                  <button onClick={(e) => { e.stopPropagation(); handleAddTarget(cat); }} className="text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition p-1"><Plus className="w-4 h-4" /></button>
+                  <button onClick={(e) => { e.stopPropagation(); handleAddTarget(cat); }} className="text-gray-400 hover:text-blue-600 opacity-100 md:opacity-0 group-hover:opacity-100 transition p-1.5"><Plus className="w-4 h-4" /></button>
                 </div>
                 
                 {openCategories[cat] && (
@@ -404,7 +432,7 @@ export default function ContactsPage() {
                         const rTargets = catTargets.filter(t => (t.region || 'その他') === region);
                         return (
                           <div key={region}>
-                            <div className="flex items-center text-xs font-bold text-gray-500 mb-1 cursor-pointer hover:text-gray-700" onClick={() => toggleRegion(region)}>
+                            <div className="flex items-center text-xs font-bold text-gray-500 mb-1 cursor-pointer hover:text-gray-700 py-1" onClick={() => toggleRegion(region)}>
                               {openRegions[region] ? <ChevronDown className="w-3 h-3 mr-1" /> : <ChevronRight className="w-3 h-3 mr-1" />}
                               {region}
                             </div>
@@ -429,21 +457,27 @@ export default function ContactsPage() {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col bg-gray-50 relative overflow-hidden">
+      {/* メインエリア */}
+      <main className="flex-1 flex flex-col bg-gray-50 relative overflow-hidden w-full">
         {searchQuery.trim() ? (
           <>
-            <div className="bg-white border-b p-6 flex justify-between items-center shadow-sm z-10">
-              <div>
-                <span className="text-xs font-bold text-gray-400 mb-1 block flex items-center gap-1"><Search className="w-3 h-3"/> 横断検索結果</span>
-                <h2 className="text-2xl font-bold text-gray-800">「{searchQuery}」<span className="text-gray-500 text-lg font-normal"> の関連履歴</span></h2>
+            <div className="bg-white border-b p-4 md:p-6 flex justify-between items-center shadow-sm z-10 gap-3">
+              <div className="flex items-center gap-3 md:gap-0">
+                <button className="md:hidden p-2 bg-gray-100 rounded-md text-gray-600 hover:bg-gray-200 transition shrink-0 flex items-center gap-1.5" onClick={() => setIsMobileSidebarOpen(true)}>
+                  <PanelLeft className="w-5 h-5" />
+                </button>
+                <div>
+                  <span className="text-xs font-bold text-gray-400 mb-0.5 md:mb-1 flex items-center gap-1"><Search className="w-3 h-3"/> 横断検索結果</span>
+                  <h2 className="text-lg md:text-2xl font-bold text-gray-800 line-clamp-1">「{searchQuery}」<span className="text-gray-500 text-sm md:text-lg font-normal"> の関連履歴</span></h2>
+                </div>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 md:p-8">
+            <div className="flex-1 overflow-y-auto p-4 md:p-8">
               <div className="max-w-3xl mx-auto">
                 {searchResults.length === 0 ? (
                   <div className="text-center py-20 text-gray-400"><Search className="w-16 h-16 mx-auto mb-4 text-gray-200" /><p>一致する履歴がありません。</p></div>
                 ) : (
-                  <div className="relative border-l-2 border-blue-100 ml-4 md:ml-6 space-y-8 pb-8">
+                  <div className="relative border-l-2 border-blue-100 ml-3 md:ml-6 space-y-6 md:space-y-8 pb-8">
                     {searchResults.map(r => renderRecordCard(r, true))}
                   </div>
                 )}
@@ -452,20 +486,29 @@ export default function ContactsPage() {
           </>
         ) : activeTarget ? (
           <>
-            <div className="bg-white border-b p-6 flex justify-between items-center shadow-sm z-10">
-              <div>
-                <span className="text-xs font-bold text-gray-400 mb-1 block">{activeTarget.category}</span>
-                <h2 className="text-2xl font-bold text-gray-800">{activeTarget.name} <span className="text-gray-500 text-lg font-normal">とのコンタクト履歴</span></h2>
+            <div className="bg-white border-b p-4 md:p-6 flex justify-between items-center shadow-sm z-10 gap-2 md:gap-4">
+              <div className="flex items-center gap-3 md:gap-0 min-w-0">
+                <button className="md:hidden p-2 bg-blue-50 rounded-md text-blue-600 hover:bg-blue-100 transition shrink-0 flex items-center gap-1" onClick={() => setIsMobileSidebarOpen(true)}>
+                  <PanelLeft className="w-5 h-5" /> <span className="text-xs font-bold">リスト</span>
+                </button>
+                <div className="min-w-0">
+                  <span className="text-[10px] md:text-xs font-bold text-gray-400 mb-0.5 md:mb-1 block">{activeTarget.category}</span>
+                  <h2 className="text-lg md:text-2xl font-bold text-gray-800 truncate leading-tight">
+                    {activeTarget.name} <span className="hidden md:inline text-gray-500 text-lg font-normal">とのコンタクト履歴</span>
+                  </h2>
+                </div>
               </div>
-              <button onClick={() => openForm()} className="bg-blue-600 text-white px-5 py-2 rounded-md font-bold text-sm hover:bg-blue-700 flex items-center gap-2 shadow-sm"><Plus className="w-4 h-4" /> 新規記録を追加</button>
+              <button onClick={() => openForm()} className="bg-blue-600 text-white px-3 md:px-5 py-2 rounded-md font-bold text-xs md:text-sm hover:bg-blue-700 flex items-center gap-1.5 shadow-sm shrink-0">
+                <Plus className="w-4 h-4" /> <span className="hidden md:inline">新規記録を追加</span><span className="md:hidden">追加</span>
+              </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 md:p-8">
+            <div className="flex-1 overflow-y-auto p-4 md:p-8">
               <div className="max-w-3xl mx-auto">
                 {records.length === 0 ? (
                   <div className="text-center py-20 text-gray-400"><FileText className="w-16 h-16 mx-auto mb-4 text-gray-200" /><p>まだ履歴がありません。<br/>新規記録を追加して活動を記録しましょう。</p></div>
                 ) : (
-                  <div className="relative border-l-2 border-blue-100 ml-4 md:ml-6 space-y-8 pb-8">
+                  <div className="relative border-l-2 border-blue-100 ml-3 md:ml-6 space-y-6 md:space-y-8 pb-8">
                     {records.map(r => renderRecordCard(r, false))}
                   </div>
                 )}
@@ -473,21 +516,31 @@ export default function ContactsPage() {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
-            <Search className="w-16 h-16 mb-4 text-gray-200"/>
-            <p>左のメニューからコンタクト先を選択するか、上部の検索窓から履歴を検索してください</p>
+          <div className="flex-1 flex flex-col bg-white md:bg-gray-50">
+            <div className="md:hidden bg-white border-b p-4 flex items-center gap-3 shadow-sm z-10">
+              <button className="p-2 bg-blue-50 rounded-md text-blue-600 hover:bg-blue-100 transition flex items-center gap-1" onClick={() => setIsMobileSidebarOpen(true)}>
+                <PanelLeft className="w-5 h-5" /> <span className="text-xs font-bold">リスト</span>
+              </button>
+              <h2 className="font-bold text-gray-800">コンタクト管理</h2>
+            </div>
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8 text-center">
+              <Building2 className="w-16 h-16 mb-4 text-gray-200"/>
+              <p className="hidden md:block">左のメニューからコンタクト先を選択するか、上部の検索窓から履歴を検索してください</p>
+              <p className="md:hidden">左上の「リスト」ボタンから<br/>コンタクト先を選択してください</p>
+            </div>
           </div>
         )}
       </main>
 
+      {/* フォーム */}
       {isFormOpen && (
-        <div className="absolute inset-y-0 right-0 w-[500px] bg-white shadow-2xl border-l flex flex-col z-50 animate-in slide-in-from-right">
-          <div className="flex justify-between items-center p-5 border-b bg-gray-50">
+        <div className="absolute inset-y-0 right-0 w-full md:w-[500px] bg-white shadow-2xl border-l flex flex-col z-50 animate-in slide-in-from-right">
+          <div className="flex justify-between items-center p-4 md:p-5 border-b bg-gray-50">
             <h3 className="font-bold text-lg text-gray-800">{formData.id ? '記録を編集' : '新規記録を追加'}</h3>
-            <button onClick={() => setIsFormOpen(false)} className="text-gray-400 hover:bg-gray-200 p-1 rounded-full"><X className="w-5 h-5"/></button>
+            <button onClick={() => setIsFormOpen(false)} className="text-gray-400 hover:bg-gray-200 p-1.5 rounded-full bg-white md:bg-transparent"><X className="w-5 h-5"/></button>
           </div>
           
-          <form onSubmit={handleSaveRecord} className="flex-1 overflow-y-auto p-6 space-y-5">
+          <form onSubmit={handleSaveRecord} className="flex-1 overflow-y-auto p-5 md:p-6 space-y-5 pb-24">
             {!user && (
               <div>
                 <label className="block text-xs font-bold text-red-500 mb-1">あなたの名前（未ログインのため必須）</label>
@@ -577,14 +630,14 @@ export default function ContactsPage() {
               </div>
             </div>
 
-            <div className="pt-4"><button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 rounded-md hover:bg-blue-700 transition">保存する</button></div>
+            <div className="pt-4 mt-auto"><button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 rounded-md hover:bg-blue-700 transition">保存する</button></div>
           </form>
         </div>
       )}
 
       {mergeData && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] backdrop-blur-sm">
-          <div className="bg-white p-6 rounded-xl w-[400px] shadow-2xl">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] backdrop-blur-sm p-4">
+          <div className="bg-white p-6 rounded-xl w-full max-w-[400px] shadow-2xl">
             <h3 className="font-bold text-lg mb-2 flex items-center gap-2"><GitMerge className="w-5 h-5 text-blue-600"/> コンタクト先の統合</h3>
             <p className="text-xs text-gray-500 mb-5 leading-relaxed">
               選択中のコンタクト先の<strong className="text-red-500">すべての履歴</strong>を、別のコンタクト先に移動させます。<br/>移動後、元の項目は自動的に削除されます。
