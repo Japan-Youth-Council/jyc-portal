@@ -50,8 +50,8 @@ export default function Header() {
           <Link href="/knowledge" className={`font-medium ${isActive('/knowledge') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600'}`}>
             政策ナレッジ
           </Link>
-          <Link href="/advocacy" className={`font-medium ${isActive('/advocacy') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600'}`}>
-            提言履歴 (CRM)
+          <Link href="/contacts" className={`font-medium ${isActive('/contacts') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600'}`}>
+            コンタクト履歴
           </Link>
           <Link href="/projects" className={`font-medium ${isActive('/projects') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600'}`}>
             プロジェクト進捗
