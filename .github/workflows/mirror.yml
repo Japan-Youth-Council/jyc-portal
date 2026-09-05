@@ -28,7 +28,7 @@ jobs:
           # 3. コミット者を「Vercelと紐付いているシステムアカウント」に上書き
           # ※ここのメールアドレスは、必ずVercelアカウントを持つGitHubに登録済みのものにしてください
           git config user.name "JYC System"
-          git config user.email "lindsay.yamagishi@japanyouthcouncil.com"
+          git config user.email "system@japanyouthcouncil.com"
           
           # 4. 全ファイルをシステムアカウント名義で新しくコミット
           git add .
