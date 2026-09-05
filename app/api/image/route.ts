@@ -13,10 +13,10 @@ export async function GET(req: Request) {
     const auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: process.env.GOOGLE_CLIENT_EMAIL,
+        // ▼ ここをしっかりと改行に置換するように記述します
         private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
       },
-      // 読み込み専用のスコープを指定
-      scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+      scopes: ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive.readonly'],
     });
 
     const drive = google.drive({ version: 'v3', auth });

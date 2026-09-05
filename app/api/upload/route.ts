@@ -4,7 +4,7 @@ import { Readable } from 'stream';
 
 export async function POST(req: Request) {
   try {
-    if (!process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY || !process.env.GOOGLE_DRIVE_FOLDER_ID) {
+    if (!process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY || !process.env.GOOGLE_DRIVE_PROFILE_IMAGE_FOLDER_ID) {
       return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 });
     }
 
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     const response = await drive.files.create({
       requestBody: {
         name: file.name,
-        parents: [process.env.GOOGLE_DRIVE_FOLDER_ID],
+        parents: [process.env.GOOGLE_DRIVE_PROFILE_IMAGE_FOLDER_ID],
       },
       media: {
         mimeType: file.type,
