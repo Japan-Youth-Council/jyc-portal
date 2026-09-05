@@ -27,8 +27,10 @@ export async function GET(req: Request) {
       { responseType: 'arraybuffer' }
     );
 
-    // 4. ダウンロードしたデータを画像としてブラウザに返す
-    return new NextResponse(response.data as Buffer, {
+    // 4. ダウンロードしたデータを Uint8Array に変換してブラウザに返す（型エラー解消）
+    const bufferData = new Uint8Array(response.data as ArrayBuffer);
+
+    return new NextResponse(bufferData, {
       headers: {
         'Content-Type': response.headers['content-type'] || 'image/jpeg',
         'Cache-Control': 'public, max-age=31536000', // ブラウザにキャッシュさせて高速化
@@ -37,7 +39,6 @@ export async function GET(req: Request) {
 
   } catch (error) {
     console.error('❌ 画像取得エラー:', error);
-    // エラー時はダミーの空画像を返すなどのフォールバックも可能ですが、まずは404を返します
     return new NextResponse('画像が見つかりません', { status: 404 });
   }
 }
