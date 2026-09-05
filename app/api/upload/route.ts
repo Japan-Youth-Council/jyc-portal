@@ -4,22 +4,26 @@ import { Readable } from 'stream';
 
 export async function POST(req: Request) {
   try {
+    // 🔍 デバッグ用：何が環境変数に入っているかログを出す（機密情報は伏せ字にするか、存在チェック）
+    console.log('--- DEBUG ENV CHECK ---');
+    console.log('CLIENT_EMAIL exists:', !!process.env.GOOGLE_CLIENT_EMAIL);
+    console.log('PRIVATE_KEY length:', process.env.GOOGLE_PRIVATE_KEY?.length);
+    console.log('PRIVATE_KEY startsWith:', process.env.GOOGLE_PRIVATE_KEY?.substring(0, 30));
+    console.log('FOLDER_ID:', process.env.GOOGLE_DRIVE_PROFILE_IMAGE_FOLDER_ID);
+    console.log('-----------------------');
+
     if (!process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY || !process.env.GOOGLE_DRIVE_PROFILE_IMAGE_FOLDER_ID) {
-      return NextResponse.json({ error: 'サーバー設定エラー' }, { status: 500 });
+      return NextResponse.json({ error: 'サーバー設定エラー（環境変数不足）' }, { status: 500 });
     }
 
     const formData = await req.formData();
     const file = formData.get('file') as File;
     if (!file) return NextResponse.json({ error: 'ファイルがありません' }, { status: 400 });
 
-    // 1. ファイルを確実にBufferに変換
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-
-    // 0バイト防止：Readable.from を使って確実に全データを流し込む
     const stream = Readable.from(buffer);
 
-    // 安全にプライベートキーを取得してパース（ダブルクォーテーション除去＆改行復元）
     const rawKey = process.env.GOOGLE_PRIVATE_KEY || '';
     const privateKey = rawKey.replace(/^"(.*)"$/, '$1').replace(/\\n/g, '\n');
 
@@ -33,11 +37,10 @@ export async function POST(req: Request) {
 
     const drive = google.drive({ version: 'v3', auth });
 
-    // 2. アップロードを実行
     const response = await drive.files.create({
       requestBody: {
         name: file.name,
-        parents: [process.env.GOOGLE_DRIVE_PROFILE_IMAGE_FOLDER_ID],
+        parents: [process.env.GOOGLE_DRIVE_PROFILE_IMAGE_FOLDER_ID!],
       },
       media: {
         mimeType: file.type,
@@ -48,14 +51,12 @@ export async function POST(req: Request) {
     });
 
     const fileId = response.data.id;
-
-    // 3. 外部サイトの<img>タグでブロックされずに表示できる公式URLを生成
     const directImageUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
     
     return NextResponse.json({ url: directImageUrl });
 
   } catch (error: any) {
-    console.error('❌ Upload Error Details:', error.message || error);
-    return NextResponse.json({ error: 'アップロードに失敗しました' }, { status: 500 });
+    console.error('❌ Upload Error Full Details:', error);
+    return NextResponse.json({ error: 'アップロードに失敗しました: ' + error.message }, { status: 500 });
   }
 }
