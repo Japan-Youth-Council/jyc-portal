@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: # ★ここを追加！GitHubの画面上から手動で実行できるようになります
+  workflow_dispatch:
 
 jobs:
   mirror:
@@ -12,12 +12,28 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          fetch-depth: 0
-          persist-credentials: false # ★ここを追加！勝手に別のパスワードがセットされるのを防ぎます
+          fetch-depth: 1 # 履歴は不要なので最新のみ取得
 
-      - name: Push to Personal Repo
+      - name: Re-commit as System Account and Push
         env:
           TOKEN: ${{ secrets.MIRROR_TOKEN }}
         run: |
+          # 1. あなたのPCに残っている個人のGit履歴（.gitフォルダ）を完全に削除
+          rm -rf .git
+          
+          # 2. 新しくGitを初期化し、mainブランチを作成
+          git init
+          git checkout -b main
+          
+          # 3. コミット者を「Vercelと紐付いているシステムアカウント」に上書き
+          # ※ここのメールアドレスは、必ずVercelアカウントを持つGitHubに登録済みのものにしてください
+          git config user.name "JYC System"
+          git config user.email "lindsay.yamagishi@japanyouthcouncil.com"
+          
+          # 4. 全ファイルをシステムアカウント名義で新しくコミット
+          git add .
+          git commit -m "Auto Deploy: Vercel"
+          
+          # 5. デプロイ用リポジトリに強制プッシュ
           git remote add target https://lindsay-yamagishi:${TOKEN}@github.com/lindsay-yamagishi/jyc-portal-deploy.git
-          git push --force target HEAD:main
+          git push --force target main
