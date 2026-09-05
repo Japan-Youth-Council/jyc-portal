@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch: # ★ここを追加！GitHubの画面上から手動で実行できるようになります
 
 jobs:
   mirror:
