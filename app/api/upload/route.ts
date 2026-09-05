@@ -19,10 +19,14 @@ export async function POST(req: Request) {
     // 0バイト防止：Readable.from を使って確実に全データを流し込む
     const stream = Readable.from(buffer);
 
+    // 安全にプライベートキーを取得してパース（ダブルクォーテーション除去＆改行復元）
+    const rawKey = process.env.GOOGLE_PRIVATE_KEY || '';
+    const privateKey = rawKey.replace(/^"(.*)"$/, '$1').replace(/\\n/g, '\n');
+
     const auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        private_key: privateKey,
       },
       scopes: ['https://www.googleapis.com/auth/drive.file'],
     });
@@ -46,7 +50,6 @@ export async function POST(req: Request) {
     const fileId = response.data.id;
 
     // 3. 外部サイトの<img>タグでブロックされずに表示できる公式URLを生成
-    // ※ フォルダに閲覧権限があれば、このURLでダイレクトに表示されます
     const directImageUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
     
     return NextResponse.json({ url: directImageUrl });
