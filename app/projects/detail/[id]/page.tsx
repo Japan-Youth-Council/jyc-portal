@@ -66,7 +66,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const handleSaveDesc = async () => {
     setIsSaving(true);
     try {
-      await supabase.from('projects').update({ description: editDescText }).eq('id', projectData.id);
+      const { error } = await supabase.from('projects').update({ description: editDescText }).eq('id', projectData.id);
+        if (error) throw error;
       setProjectData({ ...projectData, description: editDescText });
       setIsEditingDesc(false);
     } catch (err) {

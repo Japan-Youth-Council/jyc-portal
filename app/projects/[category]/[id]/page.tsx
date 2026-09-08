@@ -85,7 +85,8 @@ export default function CategoryProjectPage({ params }: { params: Promise<{ cate
   const handleSaveDesc = async () => {
     setIsSaving(true);
     try {
-      await supabase.from(table).update({ description: editDescText }).eq('id', parentData.id);
+      const { error } = await supabase.from('projects').update({ description: editDescText }).eq('id', projectData.id);
+        if (error) throw error;
       setParentData({ ...parentData, description: editDescText });
       setIsEditingDesc(false);
     } catch (err) { alert('保存に失敗しました'); } 
