@@ -9,10 +9,11 @@ export default function MembersPage() {
   const [filteredMembers, setFilteredMembers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // ▼ 新構造に対応したフィルター用の選択肢リスト
-  const [committeesList, setCommitteesList] = useState<{name: string}[]>([]);
-  const [branchesList, setBranchesList] = useState<{name: string}[]>([]);
-  const [majorProjectsList, setMajorProjectsList] = useState<{name: string}[]>([]);
+  // フィルター用の選択肢リスト 兼 終了済み判定用のステータス保持リスト
+  const [committeesList, setCommitteesList] = useState<{name: string, status: string}[]>([]);
+  const [branchesList, setBranchesList] = useState<{name: string, status: string}[]>([]);
+  const [majorProjectsList, setMajorProjectsList] = useState<{name: string, status: string}[]>([]);
+  const [projectsList, setProjectsList] = useState<{name: string, status: string}[]>([]);
 
   // 検索・絞り込みステート
   const [searchQuery, setSearchQuery] = useState('');
@@ -20,6 +21,9 @@ export default function MembersPage() {
   const [selectedBranch, setSelectedBranch] = useState('');
   const [selectedMajorProject, setSelectedMajorProject] = useState('');
   const [isCoreOnly, setIsCoreOnly] = useState(false);
+  
+  // ▼ 終了済みプロジェクトを表示するかどうかのトグル
+  const [showCompleted, setShowCompleted] = useState(false);
   
   const [sortMode, setSortMode] = useState<'random' | 'recent'>('random');
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
@@ -32,13 +36,16 @@ export default function MembersPage() {
         setMembers(withRandomKey);
       }
 
-      const { data: cData } = await supabase.from('policy_committees').select('name').order('created_at');
-      const { data: bData } = await supabase.from('local_branches').select('name').order('created_at');
-      const { data: mData } = await supabase.from('major_projects').select('name').order('created_at');
+      // ステータスも含めて取得する
+      const { data: cData } = await supabase.from('policy_committees').select('name, status').order('created_at');
+      const { data: bData } = await supabase.from('local_branches').select('name, status').order('created_at');
+      const { data: mData } = await supabase.from('major_projects').select('name, status').order('created_at');
+      const { data: pData } = await supabase.from('projects').select('name, status').order('created_at');
       
       if (cData) setCommitteesList(cData);
       if (bData) setBranchesList(bData);
       if (mData) setMajorProjectsList(mData);
+      if (pData) setProjectsList(pData);
 
       setIsLoading(false);
     };
@@ -77,6 +84,17 @@ export default function MembersPage() {
     setSortMode('random');
   };
 
+  // ▼ 指定されたカンマ区切りの文字列から、表示すべきタグ（終了済みを考慮）の配列を返す関数
+  const getVisibleTags = (csvString: string, masterList: {name: string, status: string}[]) => {
+    if (!csvString) return [];
+    return csvString.split(',').filter(itemName => {
+      if (showCompleted) return true;
+      // マスターデータから該当アイテムのステータスを確認
+      const itemData = masterList.find(m => m.name === itemName);
+      return itemData ? itemData.status !== '終了済み' : true;
+    });
+  };
+
   if (isLoading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold text-gray-500">読み込み中...</div>;
 
   return (
@@ -109,10 +127,19 @@ export default function MembersPage() {
                 className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 transition"
               />
             </div>
-            <label className="flex items-center justify-center gap-2 px-5 py-2.5 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg cursor-pointer hover:bg-yellow-100 transition select-none shrink-0">
-              <input type="checkbox" checked={isCoreOnly} onChange={(e) => setIsCoreOnly(e.target.checked)} className="w-4 h-4 text-yellow-600 rounded border-yellow-300 focus:ring-yellow-500" />
-              <span className="text-sm font-bold flex items-center gap-1"><Star className="w-4 h-4 fill-current"/> コアメンバーのみ</span>
-            </label>
+            
+            <div className="flex items-center gap-3 shrink-0 flex-wrap">
+              <label className="flex items-center justify-center gap-2 px-5 py-2.5 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg cursor-pointer hover:bg-yellow-100 transition select-none">
+                <input type="checkbox" checked={isCoreOnly} onChange={(e) => setIsCoreOnly(e.target.checked)} className="w-4 h-4 text-yellow-600 rounded border-yellow-300 focus:ring-yellow-500" />
+                <span className="text-sm font-bold flex items-center gap-1"><Star className="w-4 h-4 fill-current"/> コアのみ</span>
+              </label>
+
+              {/* ▼ 終了済み表示切替トグル */}
+              <label className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gray-50 border border-gray-200 text-gray-700 rounded-lg cursor-pointer hover:bg-gray-100 transition select-none">
+                <input type="checkbox" checked={showCompleted} onChange={(e) => setShowCompleted(e.target.checked)} className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
+                <span className="text-sm font-bold flex items-center gap-1">終了済みも表示</span>
+              </label>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -201,39 +228,39 @@ export default function MembersPage() {
                 <p className="text-gray-900 text-sm whitespace-pre-wrap leading-relaxed font-medium">{selectedMember.goal || '（未入力）'}</p>
               </div>
 
-              {/* ▼ 新構造に対応した4カテゴリのタグ表示 */}
+              {/* ▼ フィルタリングされたタグを表示 */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
                   <h4 className="text-[11px] font-bold text-gray-400 mb-2">所属政策委員会</h4>
-                  {selectedMember.policy_committee ? (
+                  {getVisibleTags(selectedMember.policy_committee, committeesList).length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
-                      {selectedMember.policy_committee.split(',').map((c: string) => <span key={c} className="bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-md border border-blue-200">{c}</span>)}
+                      {getVisibleTags(selectedMember.policy_committee, committeesList).map((c: string) => <span key={c} className="bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-md border border-blue-200">{c}</span>)}
                     </div>
-                  ) : <p className="text-gray-400 text-xs font-medium">未設定</p>}
+                  ) : <p className="text-gray-400 text-xs font-medium">未設定（または終了済み）</p>}
                 </div>
                 <div>
                   <h4 className="text-[11px] font-bold text-gray-400 mb-2">所属地方支部</h4>
-                  {selectedMember.local_branches ? (
+                  {getVisibleTags(selectedMember.local_branches, branchesList).length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
-                      {selectedMember.local_branches.split(',').map((b: string) => <span key={b} className="bg-purple-50 text-purple-700 text-xs font-bold px-2.5 py-1 rounded-md border border-purple-200">{b}</span>)}
+                      {getVisibleTags(selectedMember.local_branches, branchesList).map((b: string) => <span key={b} className="bg-purple-50 text-purple-700 text-xs font-bold px-2.5 py-1 rounded-md border border-purple-200">{b}</span>)}
                     </div>
-                  ) : <p className="text-gray-400 text-xs font-medium">未設定</p>}
+                  ) : <p className="text-gray-400 text-xs font-medium">未設定（または終了済み）</p>}
                 </div>
                 <div>
                   <h4 className="text-[11px] font-bold text-gray-400 mb-2">参加大プロジェクト</h4>
-                  {selectedMember.major_projects ? (
+                  {getVisibleTags(selectedMember.major_projects, majorProjectsList).length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
-                      {selectedMember.major_projects.split(',').map((m: string) => <span key={m} className="bg-orange-50 text-orange-700 text-xs font-bold px-2.5 py-1 rounded-md border border-orange-200">{m}</span>)}
+                      {getVisibleTags(selectedMember.major_projects, majorProjectsList).map((m: string) => <span key={m} className="bg-orange-50 text-orange-700 text-xs font-bold px-2.5 py-1 rounded-md border border-orange-200">{m}</span>)}
                     </div>
-                  ) : <p className="text-gray-400 text-xs font-medium">未設定</p>}
+                  ) : <p className="text-gray-400 text-xs font-medium">未設定（または終了済み）</p>}
                 </div>
                 <div>
                   <h4 className="text-[11px] font-bold text-gray-400 mb-2">個別小プロジェクト</h4>
-                  {selectedMember.projects ? (
+                  {getVisibleTags(selectedMember.projects, projectsList).length > 0 ? (
                     <div className="flex flex-wrap gap-1.5">
-                      {selectedMember.projects.split(',').map((p: string) => <span key={p} className="bg-green-50 text-green-700 text-xs font-bold px-2.5 py-1 rounded-md border border-green-200">{p}</span>)}
+                      {getVisibleTags(selectedMember.projects, projectsList).map((p: string) => <span key={p} className="bg-green-50 text-green-700 text-xs font-bold px-2.5 py-1 rounded-md border border-green-200">{p}</span>)}
                     </div>
-                  ) : <p className="text-gray-400 text-xs font-medium">未設定</p>}
+                  ) : <p className="text-gray-400 text-xs font-medium">未設定（または終了済み）</p>}
                 </div>
               </div>
 
