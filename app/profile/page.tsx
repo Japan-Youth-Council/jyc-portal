@@ -28,6 +28,9 @@ export default function ProfileEditPage() {
   const [unlockError, setUnlockError] = useState('');
   const [isUnlocking, setIsUnlocking] = useState(false);
 
+  // ▼ 終了済みを表示するかどうかの状態を追加
+  const [showCompleted, setShowCompleted] = useState(false);
+
   const [committeesList, setCommitteesList] = useState<any[]>([]);
   const [branchesList, setBranchesList] = useState<any[]>([]);
   const [majorProjectsList, setMajorProjectsList] = useState<any[]>([]);
@@ -66,6 +69,7 @@ export default function ProfileEditPage() {
         if (data.photo_url) setImagePreviewUrl(data.photo_url);
       }
 
+      // プロジェクト一覧側と同じく作成日順等でベースを取得
       const { data: cData } = await supabase.from('policy_committees').select('*').order('created_at');
       const { data: bData } = await supabase.from('local_branches').select('*').order('created_at');
       const { data: mData } = await supabase.from('major_projects').select('*').order('created_at');
@@ -94,29 +98,19 @@ export default function ProfileEditPage() {
     }
   };
 
-const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (file) {
-    // プレビューは即座に表示してサクサク感を出す
-    setImagePreviewUrl(URL.createObjectURL(file));
-
-    try {
-      // Vercelの制限を回避するため、ここで最大4MBに自動圧縮
-      const options = {
-        maxSizeMB: 4,
-        maxWidthOrHeight: 1920,
-        useWebWorker: true,
-      };
-      const compressedFile = await imageCompression(file, options);
-      
-      // 圧縮後の軽いファイルを送信用の状態としてセット
-      setProfileImage(compressedFile);
-    } catch (error) {
-      console.error('画像圧縮エラー:', error);
-      alert('画像の処理に失敗しました。');
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImagePreviewUrl(URL.createObjectURL(file));
+      try {
+        const options = { maxSizeMB: 4, maxWidthOrHeight: 1920, useWebWorker: true };
+        const compressedFile = await imageCompression(file, options);
+        setProfileImage(compressedFile);
+      } catch (error) {
+        alert('画像の処理に失敗しました。');
+      }
     }
-  }
-};
+  };
 
   const clearImage = () => {
     setProfileImage(null);
@@ -129,18 +123,9 @@ const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!currentPassword) return;
     setIsUnlocking(true);
     setUnlockError('');
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email: user.email,
-      password: currentPassword,
-    });
-
-    if (error) {
-      setUnlockError('パスワードが間違っています。');
-    } else {
-      setIsUnlocked(true);
-      setCurrentPassword('');
-    }
+    const { error } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword });
+    if (error) setUnlockError('パスワードが間違っています。');
+    else { setIsUnlocked(true); setCurrentPassword(''); }
     setIsUnlocking(false);
   };
 
@@ -156,13 +141,9 @@ const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const updateData: any = {};
         if (authEmail !== user.email) updateData.email = authEmail;
         if (newPassword) updateData.password = newPassword;
-
         const { error: authError } = await supabase.auth.updateUser(updateData);
         if (authError) throw authError;
-
-        if (authEmail !== user.email) {
-          authMessage = ' ※メールアドレス変更の確認メールを新旧両方のアドレスに送信しました。';
-        }
+        if (authEmail !== user.email) authMessage = ' ※メールアドレス変更の確認メールを新旧両方のアドレスに送信しました。';
       }
 
       let finalPhotoUrl = formData.photo_url;
@@ -189,18 +170,11 @@ const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
 
       if (dbError) throw dbError;
 
-      await supabase.auth.updateUser({
-        data: { full_name: formData.name, avatar_url: finalPhotoUrl }
-      });
+      await supabase.auth.updateUser({ data: { full_name: formData.name, avatar_url: finalPhotoUrl } });
 
       setMessage({ text: 'プロフィールを更新しました。' + authMessage, isError: false });
-      
-      if (newPassword) {
-        setNewPassword('');
-        setIsUnlocked(false);
-      }
+      if (newPassword) { setNewPassword(''); setIsUnlocked(false); }
       setTimeout(() => window.location.reload(), 2000);
-
     } catch (err: any) {
       setMessage({ text: '更新に失敗しました: ' + err.message, isError: true });
     } finally {
@@ -208,43 +182,62 @@ const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     }
   };
 
-  // ▼ ツリー構造のチェックボックスの文字色も明確な黒（text-gray-900）に修正
-  const renderTreeSection = (title: string, parentField: keyof typeof formData, parents: any[], parentTypeStr: string) => (
-    <div className="mb-5">
-      <label className="block text-xs font-bold text-gray-800 mb-2">{title} <span className="text-[10px] bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded">複数選択可</span></label>
-      <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-4">
-        {parents.map(parent => {
-          const isParentChecked = formData[parentField] ? String(formData[parentField]).split(',').includes(parent.name) : false;
-          const children = projectsList.filter(p => p.parent_type === parentTypeStr && p.parent_name === parent.name);
-          
-          return (
-            <div key={parent.name} className="space-y-1.5">
-              <label className={`flex items-center gap-2 text-sm cursor-pointer transition ${parent.status === '進行中' ? 'text-gray-900 font-bold hover:text-blue-600' : 'text-gray-400'}`}>
-                <input type="checkbox" checked={isParentChecked} onChange={() => handleCheckboxChange(parentField, parent.name)} className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
-                {parent.name}
-                {parent.status !== '進行中' && <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-normal">{parent.status}</span>}
-              </label>
-              
-              {children.length > 0 && (
-                <div className="pl-6 space-y-1.5 border-l-2 border-gray-200 ml-2 mt-1">
-                  {children.map(child => {
-                    const isChildChecked = formData.projects ? String(formData.projects).split(',').includes(child.name) : false;
-                    return (
-                      <label key={child.name} className={`flex items-center gap-2 text-sm cursor-pointer transition ${child.status === '進行中' ? 'text-gray-900 font-medium hover:text-green-600' : 'text-gray-400'}`}>
-                        <input type="checkbox" checked={isChildChecked} onChange={() => handleCheckboxChange('projects', child.name)} className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" />
-                        {child.name}
-                        {child.status !== '進行中' && <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-normal">{child.status}</span>}
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
+  // ▼ ツリー構造のレンダリング（終了済みのフィルタリング処理を追加）
+  const renderTreeSection = (title: string, parentField: keyof typeof formData, parents: any[], parentTypeStr: string) => {
+    // 親要素をフィルタリング
+    const visibleParents = parents.filter(parent => {
+      const isParentChecked = formData[parentField] ? String(formData[parentField]).split(',').includes(parent.name) : false;
+      // 終了済み ＆ チェックされていない ＆ 表示設定オフ なら隠す
+      if (!showCompleted && parent.status === '終了済み' && !isParentChecked) return false;
+      return true;
+    });
+
+    if (visibleParents.length === 0) return null;
+
+    return (
+      <div className="mb-6">
+        <label className="block text-xs font-bold text-gray-800 mb-2">{title} <span className="text-[10px] bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded">複数選択可</span></label>
+        <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-4">
+          {visibleParents.map(parent => {
+            const isParentChecked = formData[parentField] ? String(formData[parentField]).split(',').includes(parent.name) : false;
+            
+            // 子要素をフィルタリング
+            const children = projectsList.filter(p => p.parent_type === parentTypeStr && p.parent_name === parent.name);
+            const visibleChildren = children.filter(child => {
+              const isChildChecked = formData.projects ? String(formData.projects).split(',').includes(child.name) : false;
+              if (!showCompleted && child.status === '終了済み' && !isChildChecked) return false;
+              return true;
+            });
+            
+            return (
+              <div key={parent.name} className="space-y-1.5">
+                <label className={`flex items-center gap-2 text-sm cursor-pointer transition ${parent.status === '進行中' ? 'text-gray-900 font-bold hover:text-blue-600' : 'text-gray-500'}`}>
+                  <input type="checkbox" checked={isParentChecked} onChange={() => handleCheckboxChange(parentField, parent.name)} className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+                  <span className={parent.status === '終了済み' ? 'opacity-80' : ''}>{parent.name}</span>
+                  {parent.status !== '進行中' && <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-normal">{parent.status}</span>}
+                </label>
+                
+                {visibleChildren.length > 0 && (
+                  <div className="pl-6 space-y-1.5 border-l-2 border-gray-200 ml-2 mt-1">
+                    {visibleChildren.map(child => {
+                      const isChildChecked = formData.projects ? String(formData.projects).split(',').includes(child.name) : false;
+                      return (
+                        <label key={child.name} className={`flex items-center gap-2 text-sm cursor-pointer transition ${child.status === '進行中' ? 'text-gray-900 font-medium hover:text-green-600' : 'text-gray-500'}`}>
+                          <input type="checkbox" checked={isChildChecked} onChange={() => handleCheckboxChange('projects', child.name)} className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" />
+                          <span className={child.status === '終了済み' ? 'opacity-80' : ''}>{child.name}</span>
+                          {child.status !== '進行中' && <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-normal">{child.status}</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   if (isLoading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold text-gray-500">読み込み中...</div>;
 
@@ -276,21 +269,11 @@ const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
                     type="password" 
                     value={currentPassword} 
                     onChange={(e) => setCurrentPassword(e.target.value)} 
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleUnlock();
-                      }
-                    }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleUnlock(); } }}
                     placeholder="現在のパスワード" 
                     className="flex-1 border border-gray-300 p-2.5 rounded-lg text-sm text-gray-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-white" 
                   />
-                  <button 
-                    type="button" 
-                    onClick={handleUnlock} 
-                    disabled={!currentPassword || isUnlocking} 
-                    className="bg-blue-600 text-white text-sm font-bold px-5 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 shrink-0 shadow-sm"
-                  >
+                  <button type="button" onClick={handleUnlock} disabled={!currentPassword || isUnlocking} className="bg-blue-600 text-white text-sm font-bold px-5 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 shrink-0 shadow-sm">
                     {isUnlocking ? '確認中...' : 'ロック解除'}
                   </button>
                 </div>
@@ -357,7 +340,21 @@ const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
 
           <div><label className="block text-xs font-bold text-gray-800 mb-1">居住地（市区町村など）</label><input type="text" name="city" value={formData.city} onChange={handleChange} className="w-full border border-gray-300 p-2.5 rounded-lg text-sm text-gray-900 font-medium" /></div>
 
-          <div className="pt-2">
+          {/* ▼ 所属プロジェクトのエリア（ここにトグルボタンを追加） */}
+          <div className="pt-6 border-t mt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-gray-800">所属・参加プロジェクト設定</h3>
+              <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-gray-600 hover:text-gray-900 transition">
+                <input 
+                  type="checkbox" 
+                  checked={showCompleted} 
+                  onChange={(e) => setShowCompleted(e.target.checked)} 
+                  className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer" 
+                />
+                終了済みも表示
+              </label>
+            </div>
+            
             {renderTreeSection('所属政策委員会', 'policy_committee', committeesList, '政策委員会')}
             {renderTreeSection('所属地方支部', 'local_branches', branchesList, '地方支部')}
             {renderTreeSection('参加大プロジェクト', 'major_projects', majorProjectsList, '大プロジェクト')}

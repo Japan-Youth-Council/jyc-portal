@@ -21,7 +21,8 @@ export default function LoginPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [resetEmail, setResetEmail] = useState('');
 
-  // ▼ 新構造に対応した4つのリストステート
+  const [showCompleted, setShowCompleted] = useState(false);
+
   const [committeesList, setCommitteesList] = useState<any[]>([]);
   const [branchesList, setBranchesList] = useState<any[]>([]);
   const [majorProjectsList, setMajorProjectsList] = useState<any[]>([]);
@@ -31,7 +32,6 @@ export default function LoginPage() {
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
 
-  // ▼ formDataに local_branches と major_projects を追加
   const [formData, setFormData] = useState({
     email: '', password: '', name: '', furigana: '', attribute: '大学生', prefecture: '東京都', city: '',
     goal: '', policy_committee: '', local_branches: '', major_projects: '', projects: '', 
@@ -45,7 +45,6 @@ export default function LoginPage() {
     };
     checkUser();
 
-    // データベースから4種類の組織・プロジェクト情報を取得
     const fetchOptions = async () => {
       const { data: cData } = await supabase.from('policy_committees').select('*').order('created_at');
       const { data: bData } = await supabase.from('local_branches').select('*').order('created_at');
@@ -74,28 +73,18 @@ export default function LoginPage() {
   };
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (file) {
-    // プレビューは即座に表示してサクサク感を出す
-    setImagePreviewUrl(URL.createObjectURL(file));
-
-    try {
-      // Vercelの制限を回避するため、ここで最大4MBに自動圧縮
-      const options = {
-        maxSizeMB: 4,
-        maxWidthOrHeight: 1920,
-        useWebWorker: true,
-      };
-      const compressedFile = await imageCompression(file, options);
-      
-      // 圧縮後の軽いファイルを送信用の状態としてセット
-      setProfileImage(compressedFile);
-    } catch (error) {
-      console.error('画像圧縮エラー:', error);
-      alert('画像の処理に失敗しました。');
+    const file = e.target.files?.[0];
+    if (file) {
+      setImagePreviewUrl(URL.createObjectURL(file));
+      try {
+        const options = { maxSizeMB: 4, maxWidthOrHeight: 1920, useWebWorker: true };
+        const compressedFile = await imageCompression(file, options);
+        setProfileImage(compressedFile);
+      } catch (error) {
+        alert('画像の処理に失敗しました。');
+      }
     }
-  }
-};
+  };
 
   const clearImage = () => {
     setProfileImage(null);
@@ -176,46 +165,58 @@ export default function LoginPage() {
     setIsLoading(false);
   };
 
-  // ▼ ツリー構造を描画するための共通関数
-  const renderTreeSection = (title: string, parentField: keyof typeof formData, parents: any[], parentTypeStr: string) => (
-    <div className="mb-5">
-      <label className="block text-xs font-bold text-gray-800 mb-2">{title} <span className="text-[10px] bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded">複数選択可</span></label>
-      <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-4">
-        {parents.map(parent => {
-          const isParentChecked = formData[parentField] ? String(formData[parentField]).split(',').includes(parent.name) : false;
-          // この親に紐づく小プロジェクトを抽出
-          const children = projectsList.filter(p => p.parent_type === parentTypeStr && p.parent_name === parent.name);
-          
-          return (
-            <div key={parent.name} className="space-y-1.5">
-              {/* 親のチェックボックス */}
-              <label className={`flex items-center gap-2 text-sm cursor-pointer transition ${parent.status === '進行中' ? 'text-gray-800 font-bold hover:text-blue-600' : 'text-gray-400'}`}>
-                <input type="checkbox" checked={isParentChecked} onChange={() => handleCheckboxChange(parentField, parent.name)} className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
-                {parent.name}
-                {parent.status !== '進行中' && <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-normal">{parent.status}</span>}
-              </label>
-              
-              {/* 子のチェックボックス（少しインデントしてツリー表示） */}
-              {children.length > 0 && (
-                <div className="pl-6 space-y-1.5 border-l-2 border-gray-200 ml-2 mt-1">
-                  {children.map(child => {
-                    const isChildChecked = formData.projects ? String(formData.projects).split(',').includes(child.name) : false;
-                    return (
-                      <label key={child.name} className={`flex items-center gap-2 text-sm cursor-pointer transition ${child.status === '進行中' ? 'text-gray-700 hover:text-green-600' : 'text-gray-400'}`}>
-                        <input type="checkbox" checked={isChildChecked} onChange={() => handleCheckboxChange('projects', child.name)} className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" />
-                        {child.name}
-                        {child.status !== '進行中' && <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-normal">{child.status}</span>}
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
+  const renderTreeSection = (title: string, parentField: keyof typeof formData, parents: any[], parentTypeStr: string) => {
+    const visibleParents = parents.filter(parent => {
+      const isParentChecked = formData[parentField] ? String(formData[parentField]).split(',').includes(parent.name) : false;
+      if (!showCompleted && parent.status === '終了済み' && !isParentChecked) return false;
+      return true;
+    });
+
+    if (visibleParents.length === 0) return null;
+
+    return (
+      <div className="mb-6">
+        <label className="block text-xs font-bold text-gray-800 mb-2">{title} <span className="text-[10px] bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded">複数選択可</span></label>
+        <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-4">
+          {visibleParents.map(parent => {
+            const isParentChecked = formData[parentField] ? String(formData[parentField]).split(',').includes(parent.name) : false;
+            
+            const children = projectsList.filter(p => p.parent_type === parentTypeStr && p.parent_name === parent.name);
+            const visibleChildren = children.filter(child => {
+              const isChildChecked = formData.projects ? String(formData.projects).split(',').includes(child.name) : false;
+              if (!showCompleted && child.status === '終了済み' && !isChildChecked) return false;
+              return true;
+            });
+            
+            return (
+              <div key={parent.name} className="space-y-1.5">
+                <label className={`flex items-center gap-2 text-sm cursor-pointer transition ${parent.status === '進行中' ? 'text-black font-bold hover:text-blue-600' : 'text-gray-500'}`}>
+                  <input type="checkbox" checked={isParentChecked} onChange={() => handleCheckboxChange(parentField, parent.name)} className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+                  <span className={parent.status === '終了済み' ? 'opacity-80' : ''}>{parent.name}</span>
+                  {parent.status !== '進行中' && <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-normal">{parent.status}</span>}
+                </label>
+                
+                {visibleChildren.length > 0 && (
+                  <div className="pl-6 space-y-1.5 border-l-2 border-gray-200 ml-2 mt-1">
+                    {visibleChildren.map(child => {
+                      const isChildChecked = formData.projects ? String(formData.projects).split(',').includes(child.name) : false;
+                      return (
+                        <label key={child.name} className={`flex items-center gap-2 text-sm cursor-pointer transition ${child.status === '進行中' ? 'text-black font-semibold hover:text-green-600' : 'text-gray-500'}`}>
+                          <input type="checkbox" checked={isChildChecked} onChange={() => handleCheckboxChange('projects', child.name)} className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" />
+                          <span className={child.status === '終了済み' ? 'opacity-80' : ''}>{child.name}</span>
+                          {child.status !== '進行中' && <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-normal">{child.status}</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-start justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -244,7 +245,7 @@ export default function LoginPage() {
                 <p className="text-sm text-gray-600">登録したメールアドレスを入力してください。再設定用のリンクをお送りします。</p>
                 <div>
                   <label className="block text-sm font-bold text-gray-800 mb-1">メールアドレス</label>
-                  <input required type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} className="w-full border border-gray-300 p-2.5 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="example@japanyouthcouncil.com" />
+                  <input required type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm transition" placeholder="example@japanyouthcouncil.com" />
                 </div>
               </div>
               <button type="submit" disabled={isLoading} className="w-full bg-blue-700 text-white font-bold py-3.5 rounded-lg hover:bg-blue-800 transition shadow-md disabled:opacity-50">
@@ -260,12 +261,12 @@ export default function LoginPage() {
                 <h3 className="text-sm font-bold text-gray-500 border-b pb-2">認証情報</h3>
                 <div>
                   <label className="block text-sm font-bold text-gray-800 mb-1 flex items-center gap-1.5"><Mail className="w-4 h-4 text-gray-600"/> メールアドレス <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label>
-                  <input required type="email" name="email" value={formData.email} onChange={handleChange} className="w-full border border-gray-300 p-2.5 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="example@japanyouthcouncil.com" />
+                  <input required type="email" name="email" value={formData.email} onChange={handleChange} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm transition" placeholder="example@japanyouthcouncil.com" />
                   {mode === 'register' && <p className="text-[11px] text-gray-600 mt-1.5 ml-1 font-medium">※ <code>@japanyouthcouncil.com</code> のアドレスで登録するとコアメンバー権限が付与されます。</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-gray-800 mb-1 flex items-center gap-1.5"><Lock className="w-4 h-4 text-gray-600"/> パスワード <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label>
-                  <input required type="password" name="password" value={formData.password} onChange={handleChange} minLength={6} className="w-full border border-gray-300 p-2.5 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="6文字以上の英数字" />
+                  <input required type="password" name="password" value={formData.password} onChange={handleChange} minLength={6} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm transition" placeholder="6文字以上の英数字" />
                   {mode === 'login' && (
                     <div className="text-right mt-2">
                       <button type="button" onClick={() => { setMode('reset'); setError(''); setSuccessMsg(''); }} className="text-xs font-bold text-blue-600 hover:text-blue-800 transition">パスワードを忘れた方はこちら</button>
@@ -297,38 +298,71 @@ export default function LoginPage() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div><label className="block text-xs font-bold text-gray-800 mb-1">名前（活動名可） <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label><input required type="text" name="name" value={formData.name} onChange={handleChange} className="w-full border border-gray-300 p-2 rounded-lg text-sm" /></div>
-                    <div><label className="block text-xs font-bold text-gray-800 mb-1">ふりがな <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label><input required type="text" name="furigana" value={formData.furigana} onChange={handleChange} className="w-full border border-gray-300 p-2 rounded-lg text-sm" /></div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-800 mb-1">名前（活動名可） <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label>
+                      <input required type="text" name="name" value={formData.name} onChange={handleChange} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-800 mb-1">ふりがな <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label>
+                      <input required type="text" name="furigana" value={formData.furigana} onChange={handleChange} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition" />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-gray-800 mb-1">属性 <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label>
-                      <select name="attribute" value={formData.attribute} onChange={handleChange} className="w-full border border-gray-300 p-2 rounded-lg text-sm bg-white">
+                      <select name="attribute" value={formData.attribute} onChange={handleChange} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition">
                         <option value="高校生">高校生</option><option value="大学生">大学生</option><option value="大学院生">大学院生</option><option value="社会人">社会人</option><option value="その他">その他</option>
                       </select>
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-gray-800 mb-1">居住地（都道府県） <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label>
-                      <select name="prefecture" value={formData.prefecture} onChange={handleChange} className="w-full border border-gray-300 p-2 rounded-lg text-sm bg-white">
+                      <select name="prefecture" value={formData.prefecture} onChange={handleChange} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition">
                         {PREFECTURES.map(pref => <option key={pref} value={pref}>{pref}</option>)}
                       </select>
                     </div>
                   </div>
 
-                  <div><label className="block text-xs font-bold text-gray-800 mb-1">居住地（市区町村など）</label><input type="text" name="city" value={formData.city} onChange={handleChange} className="w-full border border-gray-300 p-2 rounded-lg text-sm" /></div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-800 mb-1">居住地（市区町村など）</label>
+                    <input type="text" name="city" value={formData.city} onChange={handleChange} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition" />
+                  </div>
 
-                  {/* ▼ ツリーUIの呼び出し */}
-                  <div className="pt-2">
+                  <div className="pt-6 border-t mt-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-sm font-bold text-gray-800">所属・参加プロジェクト</h3>
+                      <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-gray-600 hover:text-gray-900 transition">
+                        <input 
+                          type="checkbox" 
+                          checked={showCompleted} 
+                          onChange={(e) => setShowCompleted(e.target.checked)} 
+                          className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer" 
+                        />
+                        終了済みも表示
+                      </label>
+                    </div>
+                    
                     {renderTreeSection('所属政策委員会', 'policy_committee', committeesList, '政策委員会')}
                     {renderTreeSection('所属地方支部', 'local_branches', branchesList, '地方支部')}
                     {renderTreeSection('参加大プロジェクト', 'major_projects', majorProjectsList, '大プロジェクト')}
                   </div>
 
-                  <div><label className="block text-xs font-bold text-gray-800 mb-1 mt-2">若者協議会で実現したいこと <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label><textarea required name="goal" value={formData.goal} onChange={handleChange} rows={3} className="w-full border border-gray-300 p-2 rounded-lg text-sm resize-none"></textarea></div>
-                  <div><label className="block text-xs font-bold text-gray-800 mb-1">協議会以外での活動・所属</label><input type="text" name="outside_activities" value={formData.outside_activities} onChange={handleChange} className="w-full border border-gray-300 p-2 rounded-lg text-sm" /></div>
-                  <div><label className="block text-xs font-bold text-gray-800 mb-1">個人SNS各種リンク</label><input type="text" name="sns_links" value={formData.sns_links} onChange={handleChange} className="w-full border border-gray-300 p-2 rounded-lg text-sm" /></div>
-                  <div><label className="block text-xs font-bold text-gray-800 mb-1">自由記述（趣味・特技など）</label><textarea name="free_text" value={formData.free_text} onChange={handleChange} rows={2} className="w-full border border-gray-300 p-2 rounded-lg text-sm resize-none"></textarea></div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-800 mb-1 mt-2">若者協議会で実現したいこと <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label>
+                    <textarea required name="goal" value={formData.goal} onChange={handleChange} rows={3} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"></textarea>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-800 mb-1">協議会以外での活動・所属</label>
+                    <input type="text" name="outside_activities" value={formData.outside_activities} onChange={handleChange} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-800 mb-1">個人SNS各種リンク</label>
+                    <input type="text" name="sns_links" value={formData.sns_links} onChange={handleChange} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-800 mb-1">自由記述（趣味・特技など）</label>
+                    <textarea name="free_text" value={formData.free_text} onChange={handleChange} rows={2} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"></textarea>
+                  </div>
                 </div>
               )}
 
