@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, User, ArrowRight, Upload, X } from 'lucide-react';
+import imageCompression from 'browser-image-compression';
 
 const PREFECTURES = [
   "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県", "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
@@ -72,14 +73,29 @@ export default function LoginPage() {
     }
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) return alert('ファイルサイズは5MB以下にしてください。');
-      setProfileImage(file);
-      setImagePreviewUrl(URL.createObjectURL(file));
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (file) {
+    // プレビューは即座に表示してサクサク感を出す
+    setImagePreviewUrl(URL.createObjectURL(file));
+
+    try {
+      // Vercelの制限を回避するため、ここで最大4MBに自動圧縮
+      const options = {
+        maxSizeMB: 4,
+        maxWidthOrHeight: 1920,
+        useWebWorker: true,
+      };
+      const compressedFile = await imageCompression(file, options);
+      
+      // 圧縮後の軽いファイルを送信用の状態としてセット
+      setProfileImage(compressedFile);
+    } catch (error) {
+      console.error('画像圧縮エラー:', error);
+      alert('画像の処理に失敗しました。');
     }
-  };
+  }
+};
 
   const clearImage = () => {
     setProfileImage(null);
