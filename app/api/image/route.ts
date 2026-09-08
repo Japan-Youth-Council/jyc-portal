@@ -9,12 +9,20 @@ export async function GET(req: Request) {
     
     if (!fileId) return new NextResponse('IDが指定されていません', { status: 400 });
 
+    // 環境変数の不足チェック
+    if (!process.env.GOOGLE_CLIENT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+      return new NextResponse('サーバー設定エラー', { status: 500 });
+    }
+
+    // 安全にプライベートキーを取得してパース（ダブルクォーテーション除去＆改行復元）
+    const rawKey = process.env.GOOGLE_PRIVATE_KEY || '';
+    const privateKey = rawKey.replace(/^"(.*)"$/, '$1').replace(/\\n/g, '\n');
+
     // 2. サービスアカウントで認証（読み込み権限）
     const auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        // ▼ ここをしっかりと改行に置換するように記述します
-        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        private_key: privateKey,
       },
       scopes: ['https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive.readonly'],
     });
@@ -37,8 +45,8 @@ export async function GET(req: Request) {
       },
     });
 
-  } catch (error) {
-    console.error('❌ 画像取得エラー:', error);
+  } catch (error: any) {
+    console.error('❌ 画像取得エラー詳細:', error.message || error);
     return new NextResponse('画像が見つかりません', { status: 404 });
   }
 }
