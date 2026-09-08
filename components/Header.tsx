@@ -73,10 +73,11 @@ export default function Header() {
         {/* パソコン用のナビゲーション（スマホでは非表示） */}
         <nav className="hidden md:flex space-x-6">
           <Link href="/" className={`font-medium ${isActive('/') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600 border-b-2 border-transparent pb-1'}`}>Home</Link>
-          <Link href="/members" className={`font-medium ${isActive('/members') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600 border-b-2 border-transparent pb-1'}`}>メンバー名鑑</Link>
-          <Link href="/knowledge" className={`font-medium ${isActive('/knowledge') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600 border-b-2 border-transparent pb-1'}`}>政策ナレッジ</Link>
+          <Link href="/members" className={`font-medium ${isActive('/members') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600 border-b-2 border-transparent pb-1'}`}>メンバー自己紹介</Link>
+          <Link href="/projects" className={`font-medium ${isActive('/projects') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600 border-b-2 border-transparent pb-1'}`}>プロジェクト一覧</Link>          
           <Link href="/contacts" className={`font-medium ${isActive('/contacts') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600 border-b-2 border-transparent pb-1'}`}>コンタクト履歴</Link>
-          <Link href="/projects" className={`font-medium ${isActive('/projects') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600 border-b-2 border-transparent pb-1'}`}>プロジェクト進捗</Link>
+          <Link href="/knowledge" className={`font-medium ${isActive('/knowledge') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600 border-b-2 border-transparent pb-1'}`}>政策ナレッジ</Link>
+
         </nav>
 
         {/* ユーザー情報＆スマホ用メニューボタン */}
@@ -132,10 +133,10 @@ export default function Header() {
           
           <nav className="flex flex-col space-y-5 border-b pb-6">
             <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className={`text-base font-bold ${isActive('/') ? 'text-blue-600' : 'text-gray-700'}`}>Home</Link>
-            <Link href="/members" onClick={() => setIsMobileMenuOpen(false)} className={`text-base font-bold ${isActive('/members') ? 'text-blue-600' : 'text-gray-700'}`}>メンバー名鑑</Link>
-            <Link href="/knowledge" onClick={() => setIsMobileMenuOpen(false)} className={`text-base font-bold ${isActive('/knowledge') ? 'text-blue-600' : 'text-gray-700'}`}>政策ナレッジ</Link>
+            <Link href="/members" onClick={() => setIsMobileMenuOpen(false)} className={`text-base font-bold ${isActive('/members') ? 'text-blue-600' : 'text-gray-700'}`}>メンバー自己紹介</Link>
+            <Link href="/projects" onClick={() => setIsMobileMenuOpen(false)} className={`text-base font-bold ${isActive('/projects') ? 'text-blue-600' : 'text-gray-700'}`}>プロジェクト一覧</Link>
             <Link href="/contacts" onClick={() => setIsMobileMenuOpen(false)} className={`text-base font-bold ${isActive('/contacts') ? 'text-blue-600' : 'text-gray-700'}`}>コンタクト履歴</Link>
-            <Link href="/projects" onClick={() => setIsMobileMenuOpen(false)} className={`text-base font-bold ${isActive('/projects') ? 'text-blue-600' : 'text-gray-700'}`}>プロジェクト進捗</Link>
+            <Link href="/knowledge" onClick={() => setIsMobileMenuOpen(false)} className={`text-base font-bold ${isActive('/knowledge') ? 'text-blue-600' : 'text-gray-700'}`}>政策ナレッジ</Link>
           </nav>
           
           {/* スマホ用のユーザー表示（アコーディオン） */}

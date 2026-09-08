@@ -1,262 +1,277 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
-import { Project, ProjectUpdate } from '@/types/database';
-import { MessagesSquare, ListTree, Plus, User, CheckCircle2, PauseCircle, PlayCircle, Filter, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
+import { Plus, Edit2, X, Save, Search } from 'lucide-react';
 
 export default function ProjectsPage() {
-  const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [isCoreMember, setIsCoreMember] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   
-  const [activeView, setActiveView] = useState<'dashboard' | 'list'>('list');
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [updates, setUpdates] = useState<ProjectUpdate[]>([]);
-  
-  // 未ログイン時の名前手入力用
-  const [currentAuthorName, setCurrentAuthorName] = useState('');
-
   const [showCompleted, setShowCompleted] = useState(false);
-  const [isAddingProject, setIsAddingProject] = useState(false);
-  const [newProject, setNewProject] = useState({ title: '', parent_id: '' });
-  const [newUpdate, setNewUpdate] = useState({ project_id: '', content: '' });
-  const [filterProjectId, setFilterProjectId] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState(''); // 検索キーワード用ステート
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        setUser(session.user);
-        // ログインしていれば自動で名前をセット
-        setCurrentAuthorName(session.user.user_metadata?.full_name || '名称未設定');
-      }
-      setIsLoading(false);
-    };
-    checkAuth();
-    fetchData();
-  }, []);
+  const [committees, setCommittees] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [majorProjects, setMajorProjects] = useState<any[]>([]);
+  const [allSubProjects, setAllSubProjects] = useState<any[]>([]); // 検索用の全小プロジェクト
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setCurrentAuthorName('');
-  };
+  const [editingSection, setEditingSection] = useState<string | null>(null);
+  const [editItems, setEditItems] = useState<any[]>([]);
+  const [newItemName, setNewItemName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const fetchData = async () => {
-    const { data: pData } = await supabase.from('projects').select('*').order('created_at', { ascending: true });
-    const { data: uData } = await supabase.from('project_updates').select('*').order('created_at', { ascending: false });
-    if (pData) setProjects(pData);
-    if (uData) setUpdates(uData);
-  };
-
-  const parentProjects = projects.filter(p => p.parent_id === null);
-
-  const handleAddProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProject.title.trim()) return;
-    const parentId = newProject.parent_id ? parseInt(newProject.parent_id) : null;
-    const { data } = await supabase.from('projects').insert([{ title: newProject.title, parent_id: parentId, status: 'active' }]).select();
-    if (data) {
-      setProjects([...projects, data[0]]);
-      setIsAddingProject(false);
-      setNewProject({ title: '', parent_id: '' });
-    }
-  };
-
-  const handleUpdateStatus = async (id: number, newStatus: string) => {
-    setProjects(projects.map(p => p.id === id ? { ...p, status: newStatus as any } : p));
-    await supabase.from('projects').update({ status: newStatus }).eq('id', id);
-  };
-
-  const handleSubmitUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newUpdate.project_id || !newUpdate.content.trim()) return;
-    
-    // 名前が空欄なら警告（未ログイン時用）
-    if (!currentAuthorName.trim()) {
-      alert('作業者名を入力してください');
-      return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      setUser(session.user);
+      const { data: profile } = await supabase.from('profiles').select('is_core_member').eq('id', session.user.id).single();
+      if (profile?.is_core_member) setIsCoreMember(true);
     }
 
-    const { data } = await supabase.from('project_updates').insert([
-      { project_id: parseInt(newUpdate.project_id), content: newUpdate.content, author_name: currentAuthorName }
-    ]).select();
-    
-    if (data) {
-      setUpdates([data[0], ...updates]);
-      setNewUpdate({ ...newUpdate, content: '' });
-    }
+    const { data: cData } = await supabase.from('policy_committees').select('*');
+    const { data: bData } = await supabase.from('local_branches').select('*');
+    const { data: mData } = await supabase.from('major_projects').select('*');
+    const { data: pData } = await supabase.from('projects').select('*'); // 第3層（小プロジェクト）も全て取得
+
+    if (cData) setCommittees(cData);
+    if (bData) setBranches(bData);
+    if (mData) setMajorProjects(mData);
+    if (pData) setAllSubProjects(pData);
+    setIsLoading(false);
   };
 
-  const filteredUpdates = updates.filter(update => {
-    if (!filterProjectId) return true;
-    const fId = parseInt(filterProjectId);
-    return update.project_id === fId || projects.some(p => p.parent_id === fId && p.id === update.project_id);
-  });
+  useEffect(() => { fetchData(); }, []);
 
-  const renderStatusBadge = (status: string) => {
-    if (status === 'active') return <span className="flex items-center text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded"><PlayCircle className="w-3 h-3 mr-1"/>進行中</span>;
-    if (status === 'paused') return <span className="flex items-center text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded"><PauseCircle className="w-3 h-3 mr-1"/>休止中</span>;
-    return <span className="flex items-center text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded"><CheckCircle2 className="w-3 h-3 mr-1"/>終了</span>;
+  const sortAndFilter = (items: any[]) => {
+    const statusWeight: Record<string, number> = { '進行中': 1, '停止中': 2, '終了済み': 3 };
+    return items
+      .filter(item => showCompleted || item.status !== '終了済み')
+      .sort((a, b) => {
+        if (statusWeight[a.status] !== statusWeight[b.status]) {
+          return (statusWeight[a.status] || 99) - (statusWeight[b.status] || 99);
+        }
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
   };
 
-  if (isLoading) return <div className="min-h-screen bg-gray-50 flex justify-center items-center text-gray-400">読み込み中...</div>;
+  // 検索処理：全テーブルから名前にキーワードが含まれるものを抽出
+  const getSearchResults = () => {
+    if (!searchQuery.trim()) return [];
+    const query = searchQuery.toLowerCase();
 
-  return (
-    <div className="min-h-screen bg-gray-50 text-gray-800 font-sans flex flex-col">
-      <div className="bg-white border-b py-3 flex justify-center sticky top-[61px] z-10 shadow-sm">
-        <div className="flex bg-gray-100 p-1 rounded-lg">
-          <button onClick={() => setActiveView('list')} className={`flex items-center px-6 py-2 rounded-md text-sm font-bold transition-all ${activeView === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}><ListTree className="w-4 h-4 mr-2" />プロジェクト一覧</button>
-          <button onClick={() => setActiveView('dashboard')} className={`flex items-center px-6 py-2 rounded-md text-sm font-bold transition-all ${activeView === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}><MessagesSquare className="w-4 h-4 mr-2" />進捗ダッシュボード</button>
+    const matchedCommittees = committees.filter(c => c.name.toLowerCase().includes(query)).map(c => ({ ...c, href: `/projects/committee/${c.id}`, badge: '政策委員会' }));
+    const matchedBranches = branches.filter(b => b.name.toLowerCase().includes(query)).map(b => ({ ...b, href: `/projects/branch/${b.id}`, badge: '地方支部' }));
+    const matchedMajors = majorProjects.filter(m => m.name.toLowerCase().includes(query)).map(m => ({ ...m, href: `/projects/major/${m.id}`, badge: '大プロジェクト' }));
+    const matchedSubs = allSubProjects.filter(p => p.name.toLowerCase().includes(query)).map(p => ({ ...p, href: `/projects/detail/${p.id}`, badge: p.parent_name }));
+
+    return sortAndFilter([...matchedCommittees, ...matchedBranches, ...matchedMajors, ...matchedSubs]);
+  };
+
+  const searchResults = getSearchResults();
+
+  const handleOpenEdit = (section: string, items: any[]) => {
+    setEditingSection(section);
+    setEditItems(items.map(item => ({ ...item })));
+    setNewItemName('');
+  };
+
+  const handleItemNameChange = (id: string, newName: string) => {
+    setEditItems(prev => prev.map(item => item.id === id ? { ...item, name: newName } : item));
+  };
+
+  const handleAddRow = () => {
+    if (!newItemName.trim()) return;
+    setEditItems(prev => [...prev, { id: 'new_' + Date.now(), name: newItemName.trim(), status: '進行中', isNew: true, created_at: new Date().toISOString() }]);
+    setNewItemName('');
+  };
+
+  const handleSave = async (section: string) => {
+    setIsSaving(true);
+    let tableName = section === 'committee' ? 'policy_committees' : section === 'branch' ? 'local_branches' : 'major_projects';
+    try {
+      for (const item of editItems) {
+        if (!item.isNew) await supabase.from(tableName).update({ name: item.name }).eq('id', item.id);
+        else await supabase.from(tableName).insert({ name: item.name, status: '進行中' });
+      }
+      await fetchData();
+      setEditingSection(null);
+    } catch (err: any) { alert('保存に失敗しました: ' + err.message); } 
+    finally { setIsSaving(false); }
+  };
+
+  // カードコンポーネント（検索時にわかりやすいよう badge を追加）
+  const Card = ({ title, href, isLocked, status, badge }: { title: string, href: string, isLocked?: boolean, status?: string, badge?: string }) => (
+    <Link href={href} className={`block p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-blue-400 transition-all flex flex-col gap-1.5 ${status === '終了済み' ? 'opacity-60 bg-gray-50' : ''}`}>
+      {badge && <span className="text-[10px] text-gray-500 font-bold truncate">{badge}</span>}
+      <div className="flex items-center justify-between">
+        <span className={`font-bold text-sm ${status === '終了済み' ? 'text-gray-500' : 'text-gray-900'} truncate mr-2`}>{title}</span>
+        <div className="flex items-center gap-2 shrink-0">
+          {status && (
+            <span className={`text-[10px] px-2 py-0.5 rounded font-normal ${
+              status === '進行中' ? 'bg-green-100 text-green-700' : 
+              status === '停止中' ? 'bg-orange-100 text-orange-700' : 
+              'bg-gray-200 text-gray-600'
+            }`}>
+              {status}
+            </span>
+          )}
+          {isLocked && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full flex items-center gap-1">🔒 非公開</span>}
         </div>
       </div>
+    </Link>
+  );
 
-      <main className="flex-1 p-6">
-        {activeView === 'list' && (
-          <div className="max-w-4xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
-              <div className="flex items-center space-x-4">
-                <h2 className="text-xl font-bold text-gray-800">プロジェクト全体像</h2>
-                <label className="flex items-center text-sm text-gray-600 bg-white border px-3 py-1.5 rounded-full cursor-pointer hover:bg-gray-50">
-                  <input type="checkbox" checked={showCompleted} onChange={() => setShowCompleted(!showCompleted)} className="mr-2" />終了したプロジェクトを表示
-                </label>
+  if (isLoading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold text-gray-500">読み込み中...</div>;
+
+  const secretariatProject = majorProjects.find(p => p.name === '事務局機能');
+  const directOtherProject = majorProjects.find(p => p.name === '直轄・その他プロジェクト');
+  const regularMajorProjects = majorProjects.filter(p => p.name !== '事務局機能' && p.name !== '直轄・その他プロジェクト');
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto">
+        
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">プロジェクト一覧</h1>
+          <label className="flex items-center gap-2 cursor-pointer text-sm font-bold text-gray-600 hover:text-gray-900 transition">
+            <input 
+              type="checkbox" 
+              checked={showCompleted} 
+              onChange={(e) => setShowCompleted(e.target.checked)} 
+              className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+            />
+            終了済みも表示
+          </label>
+        </div>
+
+        {/* 検索バー */}
+        <div className="relative mb-8">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <Search className="w-5 h-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="プロジェクト名で検索..."
+            className="w-full pl-11 pr-4 py-3.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none shadow-sm transition"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600">
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* 検索キーワードがある場合は検索結果を表示、ない場合は通常の3列グリッドを表示 */}
+        {searchQuery.trim() !== '' ? (
+          <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 animate-in fade-in duration-200">
+            <h2 className="text-sm font-bold text-gray-700 border-b pb-3 mb-4">
+              検索結果（{searchResults.length}件）
+            </h2>
+            {searchResults.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {searchResults.map(item => (
+                  <Card key={`${item.badge}_${item.id}`} title={item.name} href={item.href} isLocked={item.is_locked} status={item.status} badge={item.badge} />
+                ))}
               </div>
-              <button onClick={() => setIsAddingProject(!isAddingProject)} className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700"><Plus className="w-4 h-4 mr-1" /> 新規追加</button>
-            </div>
-            {isAddingProject && (
-              <form onSubmit={handleAddProject} className="bg-white p-4 rounded-xl border shadow-sm mb-6 flex items-end gap-4">
-                <div className="flex-1">
-                  <label className="block text-xs font-bold text-gray-500 mb-1">所属（親プロジェクト）</label>
-                  <select value={newProject.parent_id} onChange={e => setNewProject({...newProject, parent_id: e.target.value})} className="w-full border rounded p-2 text-sm outline-none">
-                    <option value="">(独立したプロジェクト・委員会として作成)</option>
-                    {parentProjects.map(p => <option key={p.id} value={p.id}>{p.title} の配下に作成</option>)}
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-xs font-bold text-gray-500 mb-1">プロジェクト名</label>
-                  <input required type="text" value={newProject.title} onChange={e => setNewProject({...newProject, title: e.target.value})} className="w-full border rounded p-2 text-sm outline-none" placeholder="例: 夏季合宿の企画" />
-                </div>
-                <button type="submit" className="px-6 py-2 bg-gray-800 text-white rounded text-sm font-bold">作成</button>
-              </form>
+            ) : (
+              <p className="text-sm text-gray-500 text-center py-8">「{searchQuery}」に一致するプロジェクトは見つかりませんでした。</p>
             )}
-            <div className="space-y-6">
-              {parentProjects.map(parent => {
-                const children = projects.filter(p => p.parent_id === parent.id);
-                if (!showCompleted && parent.status === 'completed') return null;
-                return (
-                  <div key={parent.id} className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                    <div className="bg-gray-50 p-4 border-b flex justify-between items-center">
-                      <h3 className="font-bold text-lg text-gray-800 flex items-center"><ChevronRight className="w-5 h-5 text-gray-400 mr-1" />{parent.title}</h3>
-                      <select value={parent.status} onChange={e => handleUpdateStatus(parent.id, e.target.value)} className="text-sm border rounded px-2 py-1 bg-white outline-none cursor-pointer">
-                        <option value="active">進行中</option><option value="paused">休止中</option><option value="completed">終了</option>
-                      </select>
-                    </div>
-                    <div className="p-4 space-y-3">
-                      {children.map(child => {
-                        if (!showCompleted && child.status === 'completed') return null;
-                        return (
-                          <div key={child.id} className="flex justify-between items-center pl-8 py-2 border-l-2 border-gray-100 ml-4 hover:bg-gray-50 rounded transition">
-                            <span className="text-gray-700 font-medium">{child.title}</span>
-                            <div className="flex items-center space-x-3">
-                              {renderStatusBadge(child.status)}
-                              <select value={child.status} onChange={e => handleUpdateStatus(child.id, e.target.value)} className="text-xs border rounded px-1 py-0.5 bg-white outline-none text-gray-500 cursor-pointer">
-                                <option value="active">進行中へ</option><option value="paused">休止中へ</option><option value="completed">終了へ</option>
-                              </select>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {children.length === 0 && <p className="text-xs text-gray-400 pl-8 ml-4">紐づく個別プロジェクトはありません。</p>}
-                    </div>
+          </section>
+        ) : (
+          /* 通常の3列グリッド */
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in duration-200">
+            {/* 左列 */}
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-3">
+                {secretariatProject && (
+                  <Card title={secretariatProject.name} href={`/projects/major/${secretariatProject.id}`} isLocked={secretariatProject.is_locked} status={secretariatProject.status} />
+                )}
+              </div>
+              <section className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between border-b pb-3 mb-4">
+                  <h2 className="text-sm font-bold text-gray-700">地方支部</h2>
+                  {isCoreMember && <button onClick={() => handleOpenEdit('branch', branches)} className="text-xs text-blue-600 font-bold hover:underline flex items-center gap-1"><Edit2 className="w-3.5 h-3.5"/> 編集</button>}
+                </div>
+                <div className="flex flex-col gap-3">
+                  {sortAndFilter(branches).map((branch) => (
+                    <Card key={branch.id} title={branch.name} href={`/projects/branch/${branch.id}`} isLocked={branch.is_locked} status={branch.status} />
+                  ))}
+                </div>
+              </section>
+            </div>
+
+            {/* 中央列 */}
+            <div className="flex flex-col gap-6">
+              <section className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between border-b pb-3 mb-4">
+                  <h2 className="text-sm font-bold text-gray-700">政策委員会</h2>
+                  {isCoreMember && <button onClick={() => handleOpenEdit('committee', committees)} className="text-xs text-blue-600 font-bold hover:underline flex items-center gap-1"><Edit2 className="w-3.5 h-3.5"/> 編集</button>}
+                </div>
+                <div className="flex flex-col gap-3">
+                  {sortAndFilter(committees).map((committee) => {
+                    const displayName = committee.name.includes('政策委員会') ? committee.name : `${committee.name}政策委員会`;
+                    return <Card key={committee.id} title={displayName} href={`/projects/committee/${committee.id}`} isLocked={committee.is_locked} status={committee.status} />;
+                  })}
+                </div>
+              </section>
+            </div>
+
+            {/* 右列 */}
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-3">
+                {directOtherProject && (
+                  <Card title={directOtherProject.name} href={`/projects/major/${directOtherProject.id}`} isLocked={directOtherProject.is_locked} status={directOtherProject.status} />
+                )}
+              </div>
+              <section className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                <div className="flex items-center justify-between border-b pb-3 mb-4">
+                  <h2 className="text-sm font-bold text-gray-700">大プロジェクト</h2>
+                  {isCoreMember && <button onClick={() => handleOpenEdit('major', regularMajorProjects)} className="text-xs text-blue-600 font-bold hover:underline flex items-center gap-1"><Edit2 className="w-3.5 h-3.5"/> 編集</button>}
+                </div>
+                <div className="flex flex-col gap-3">
+                  {sortAndFilter(regularMajorProjects).map((major) => (
+                    <Card key={major.id} title={major.name} href={`/projects/major/${major.id}`} isLocked={major.is_locked} status={major.status} />
+                  ))}
+                </div>
+              </section>
+            </div>
+          </div>
+        )}
+
+        {/* 編集モーダル */}
+        {editingSection && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl space-y-4">
+              <div className="flex justify-between items-center border-b pb-3">
+                <h3 className="font-bold text-gray-900">{editingSection === 'committee' ? '政策委員会の編集' : editingSection === 'branch' ? '地方支部の編集' : '大プロジェクトの編集'}</h3>
+                <button onClick={() => setEditingSection(null)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
+              </div>
+              <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+                {editItems.map(item => (
+                  <div key={item.id} className="flex gap-2">
+                    <input type="text" value={item.name} onChange={(e) => handleItemNameChange(item.id, e.target.value)} className="flex-1 border border-gray-300 p-2 rounded-lg text-sm text-gray-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
                   </div>
-                );
-              })}
+                ))}
+              </div>
+              <div className="pt-3 border-t flex gap-2">
+                <input type="text" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} placeholder="新しい名前を入力" className="flex-1 border border-gray-300 p-2 rounded-lg text-sm text-gray-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none" />
+                <button type="button" onClick={handleAddRow} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-1 transition"><Plus className="w-4 h-4"/> 追加</button>
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <button onClick={() => setEditingSection(null)} className="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-lg">キャンセル</button>
+                <button onClick={() => handleSave(editingSection)} disabled={isSaving} className="px-5 py-2 text-sm font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"><Save className="w-4 h-4 inline-block mr-1"/> 保存</button>
+              </div>
             </div>
           </div>
         )}
 
-        {activeView === 'dashboard' && (
-          <div className="max-w-3xl mx-auto space-y-6">
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center space-x-2 text-sm">
-                <Filter className="w-4 h-4 text-gray-400" />
-                <span className="font-bold text-gray-600">表示切替:</span>
-                <select value={filterProjectId} onChange={e => setFilterProjectId(e.target.value)} className="border rounded-full px-3 py-1 bg-white outline-none text-gray-700 shadow-sm">
-                  <option value="">すべての投稿を表示</option>
-                  {parentProjects.map(p => (
-                    <optgroup key={p.id} label={`▼ ${p.title}`}>
-                      <option value={p.id}>{p.title} (全体)</option>
-                      {projects.filter(child => child.parent_id === p.id).map(c => <option key={c.id} value={c.id}> └ {c.title}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-              </div>
-              
-              {/* ログイン・未ログインでの表示切り替え */}
-              {user ? (
-                <div className="flex items-center border rounded-full px-3 py-1.5 text-sm bg-gray-100 border-gray-200 shadow-sm">
-                  <User className="w-4 h-4 mr-2 text-gray-500" />
-                  <span className="text-gray-700 font-bold">{currentAuthorName} として投稿</span>
-                </div>
-              ) : (
-                <div className="flex items-center border rounded-full px-3 py-1 text-sm bg-red-50 border-red-200 shadow-sm">
-                  <User className="w-4 h-4 mr-2 text-red-500" />
-                  <input 
-                    type="text" placeholder="作業者名を入力 (必須)" 
-                    value={currentAuthorName} onChange={e => setCurrentAuthorName(e.target.value)} 
-                    className="bg-transparent outline-none w-36 placeholder-red-300 font-bold" 
-                  />
-                </div>
-              )}
-            </div>
-
-            <form onSubmit={handleSubmitUpdate} className="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-              <h3 className="text-sm font-bold text-gray-800 mb-3">進捗を報告する</h3>
-              <div className="space-y-3">
-                <select required value={newUpdate.project_id} onChange={e => setNewUpdate({...newUpdate, project_id: e.target.value})} className="w-full border-b pb-2 text-sm outline-none bg-transparent font-bold text-blue-700">
-                  <option value="">紐づけるプロジェクトを選択...</option>
-                  {parentProjects.map(p => (
-                    <optgroup key={p.id} label={`【大枠】${p.title}`}>
-                      <option value={p.id}>{p.title} 全体への報告</option>
-                      {projects.filter(child => child.parent_id === p.id).map(c => <option key={c.id} value={c.id}> └ {c.title} への報告</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-                <textarea required value={newUpdate.content} onChange={e => setNewUpdate({...newUpdate, content: e.target.value})} placeholder="いまどんな作業をしている？進捗や課題は？" className="w-full h-20 p-3 border rounded-md outline-none focus:border-blue-500 text-sm resize-y bg-gray-50" />
-                <div className="flex justify-end"><button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded-md font-bold text-sm hover:bg-blue-700">投稿する</button></div>
-              </div>
-            </form>
-
-            <div className="space-y-4">
-              {filteredUpdates.length === 0 ? (
-                <div className="text-center py-10 text-gray-400"><MessagesSquare className="w-12 h-12 mx-auto mb-3 text-gray-300" /><p>表示する進捗投稿がありません。</p></div>
-              ) : (
-                filteredUpdates.map(update => {
-                  const targetProject = projects.find(p => p.id === update.project_id);
-                  return (
-                    <div key={update.id} className="bg-white p-5 rounded-xl border shadow-sm flex gap-4">
-                      <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 shrink-0"><User className="w-5 h-5" /></div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start mb-1">
-                          <div>
-                            <span className="font-bold text-gray-800 mr-2">{update.author_name}</span>
-                            <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">{targetProject?.title || '不明'}</span>
-                          </div>
-                          <span className="text-xs text-gray-400">{new Date(update.created_at).toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
-                        </div>
-                        <p className="text-gray-700 text-sm mt-2 whitespace-pre-wrap leading-relaxed">{update.content}</p>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        )}
-      </main>
+      </div>
     </div>
   );
 }
