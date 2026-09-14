@@ -11,7 +11,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // ログイン不要でアクセスできるページのパスを指定
-    const publicPaths = ['/login', '/reset-password', '/privacy'];
+    const publicPaths = ['/login', '/reset-password', '/privacy', '/terms'];
     const isPublicPath = publicPaths.includes(pathname);
 
     const checkAuth = async () => {
