@@ -1,377 +1,67 @@
 "use client";
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { Mail, Lock, User, ArrowRight, Upload, X } from 'lucide-react';
-import imageCompression from 'browser-image-compression';
-
-const PREFECTURES = [
-  "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県", "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
-  "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県", "静岡県", "愛知県", "三重県", "滋賀県", "京都府", "大阪府", "兵庫県",
-  "奈良県", "和歌山県", "鳥取県", "島根県", "岡山県", "広島県", "山口県", "徳島県", "香川県", "愛媛県", "高知県", "福岡県", "佐賀県", "長崎県",
-  "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
-];
+import { LogIn } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<'login' | 'register' | 'reset'>('login');
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-  const [resetEmail, setResetEmail] = useState('');
-
-  const [showCompleted, setShowCompleted] = useState(false);
-
-  const [committeesList, setCommitteesList] = useState<any[]>([]);
-  const [branchesList, setBranchesList] = useState<any[]>([]);
-  const [majorProjectsList, setMajorProjectsList] = useState<any[]>([]);
-  const [projectsList, setProjectsList] = useState<any[]>([]);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [profileImage, setProfileImage] = useState<File | null>(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
-
-  const [formData, setFormData] = useState({
-    email: '', password: '', name: '', furigana: '', attribute: '大学生', prefecture: '東京都', city: '',
-    goal: '', policy_committee: '', local_branches: '', major_projects: '', projects: '', 
-    sns_links: '', outside_activities: '', free_text: ''
-  });
 
   useEffect(() => {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      // すでにログインしている場合はホーム画面へ
       if (session?.user) router.push('/');
     };
     checkUser();
-
-    const fetchOptions = async () => {
-      const { data: cData } = await supabase.from('policy_committees').select('*').order('created_at');
-      const { data: bData } = await supabase.from('local_branches').select('*').order('created_at');
-      const { data: mData } = await supabase.from('major_projects').select('*').order('created_at');
-      const { data: pData } = await supabase.from('projects').select('*').order('created_at');
-      
-      if (cData) setCommitteesList(cData);
-      if (bData) setBranchesList(bData);
-      if (mData) setMajorProjectsList(mData);
-      if (pData) setProjectsList(pData);
-    };
-    fetchOptions();
   }, [router]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleCheckboxChange = (field: keyof typeof formData, value: string) => {
-    const currentArray = formData[field] ? String(formData[field]).split(',') : [];
-    if (currentArray.includes(value)) {
-      setFormData({ ...formData, [field]: currentArray.filter(v => v !== value).join(',') });
-    } else {
-      setFormData({ ...formData, [field]: [...currentArray, value].join(',') });
-    }
-  };
-
-  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImagePreviewUrl(URL.createObjectURL(file));
-      try {
-        const options = { maxSizeMB: 4, maxWidthOrHeight: 1920, useWebWorker: true };
-        const compressedFile = await imageCompression(file, options);
-        setProfileImage(compressedFile);
-      } catch (error) {
-        alert('画像の処理に失敗しました。');
-      }
-    }
-  };
-
-  const clearImage = () => {
-    setProfileImage(null);
-    setImagePreviewUrl(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleGoogleLogin = async () => {
     setIsLoading(true);
-    setError('');
-    setSuccessMsg('');
-    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    if (error) setError(error.message);
-    else {
-      setSuccessMsg('パスワード再設定用のメールを送信しました。メール内のリンクをクリックしてください。');
-      setResetEmail('');
-    }
-    setIsLoading(false);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError('');
-    setSuccessMsg('');
-
-    if (mode === 'login') {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: formData.email, password: formData.password,
-      });
-      if (error) setError('メールアドレスまたはパスワードが間違っています。');
-      else router.push('/');
-    } else if (mode === 'register') {
-      let uploadedPhotoUrl = '';
-      if (profileImage) {
-        const uploadData = new FormData();
-        uploadData.append('file', profileImage);
-        try {
-          const res = await fetch('/api/upload', { method: 'POST', body: uploadData });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error);
-          uploadedPhotoUrl = data.url;
-        } catch (err: any) {
-          setError('画像のアップロードに失敗しました。');
-          setIsLoading(false);
-          return;
-        }
+    // Googleログイン画面へリダイレクト
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        // ログイン成功後に元のサイト（ホーム画面）に戻ってくるための設定
+        redirectTo: `${window.location.origin}/`,
       }
-
-      const isCore = formData.email.endsWith('@japanyouthcouncil.com');
-
-      const { error } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            full_name: formData.name, avatar_url: uploadedPhotoUrl, name: formData.name, furigana: formData.furigana,
-            attribute: formData.attribute, prefecture: formData.prefecture, city: formData.city, goal: formData.goal,
-            policy_committee: formData.policy_committee, local_branches: formData.local_branches, major_projects: formData.major_projects, 
-            projects: formData.projects, sns_links: formData.sns_links, outside_activities: formData.outside_activities, 
-            free_text: formData.free_text, photo_url: uploadedPhotoUrl, is_core_member: isCore
-          }
-        }
-      });
-
-      if (error) {
-        setError(error.message);
-      } else {
-        setSuccessMsg('登録を受け付けました！確認メール内のリンクをクリックしてください。');
-        setMode('login');
-        setFormData({ ...formData, password: '' });
-        clearImage();
-      }
-    }
-    setIsLoading(false);
-  };
-
-  const renderTreeSection = (title: string, parentField: keyof typeof formData, parents: any[], parentTypeStr: string) => {
-    const visibleParents = parents.filter(parent => {
-      const isParentChecked = formData[parentField] ? String(formData[parentField]).split(',').includes(parent.name) : false;
-      if (!showCompleted && parent.status === '終了済み' && !isParentChecked) return false;
-      return true;
     });
 
-    if (visibleParents.length === 0) return null;
-
-    return (
-      <div className="mb-6">
-        <label className="block text-xs font-bold text-gray-800 mb-2">{title} <span className="text-[10px] bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded">複数選択可</span></label>
-        <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-4">
-          {visibleParents.map(parent => {
-            const isParentChecked = formData[parentField] ? String(formData[parentField]).split(',').includes(parent.name) : false;
-            
-            const children = projectsList.filter(p => p.parent_type === parentTypeStr && p.parent_name === parent.name);
-            const visibleChildren = children.filter(child => {
-              const isChildChecked = formData.projects ? String(formData.projects).split(',').includes(child.name) : false;
-              if (!showCompleted && child.status === '終了済み' && !isChildChecked) return false;
-              return true;
-            });
-            
-            return (
-              <div key={parent.name} className="space-y-1.5">
-                <label className={`flex items-center gap-2 text-sm cursor-pointer transition ${parent.status === '進行中' ? 'text-black font-bold hover:text-blue-600' : 'text-gray-500'}`}>
-                  <input type="checkbox" checked={isParentChecked} onChange={() => handleCheckboxChange(parentField, parent.name)} className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
-                  <span className={parent.status === '終了済み' ? 'opacity-80' : ''}>{parent.name}</span>
-                  {parent.status !== '進行中' && <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-normal">{parent.status}</span>}
-                </label>
-                
-                {visibleChildren.length > 0 && (
-                  <div className="pl-6 space-y-1.5 border-l-2 border-gray-200 ml-2 mt-1">
-                    {visibleChildren.map(child => {
-                      const isChildChecked = formData.projects ? String(formData.projects).split(',').includes(child.name) : false;
-                      return (
-                        <label key={child.name} className={`flex items-center gap-2 text-sm cursor-pointer transition ${child.status === '進行中' ? 'text-black font-semibold hover:text-green-600' : 'text-gray-500'}`}>
-                          <input type="checkbox" checked={isChildChecked} onChange={() => handleCheckboxChange('projects', child.name)} className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500" />
-                          <span className={child.status === '終了済み' ? 'opacity-80' : ''}>{child.name}</span>
-                          {child.status !== '進行中' && <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-normal">{child.status}</span>}
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
+    if (error) {
+      alert("ログインに失敗しました。");
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-start justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="w-full max-w-2xl">
+      <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-blue-900">JYC Portal</h1>
           <p className="text-gray-600 text-sm mt-2 font-bold">運営メンバー専用システム</p>
         </div>
 
-        <div className="bg-white p-6 sm:p-10 rounded-2xl shadow-xl border border-gray-100">
+        <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100 flex flex-col items-center">
+          <p className="text-sm text-gray-600 mb-6 font-medium text-center">
+            JYC Portalに参加するには、お持ちのGoogleアカウントでログインしてください。
+          </p>
           
-          {mode !== 'reset' && (
-            <div className="flex bg-gray-100 p-1 rounded-lg mb-8">
-              <button type="button" onClick={() => { setMode('login'); setError(''); setSuccessMsg(''); }} className={`flex-1 py-2.5 text-sm font-bold rounded-md transition ${mode === 'login' ? 'bg-white shadow text-blue-800' : 'text-gray-600 hover:text-gray-900'}`}>ログイン</button>
-              <button type="button" onClick={() => { setMode('register'); setError(''); setSuccessMsg(''); }} className={`flex-1 py-2.5 text-sm font-bold rounded-md transition ${mode === 'register' ? 'bg-white shadow text-blue-800' : 'text-gray-600 hover:text-gray-900'}`}>新規メンバー登録</button>
-            </div>
-          )}
-
-          {error && <div className="bg-red-50 border-l-4 border-red-500 text-red-800 text-sm p-4 rounded mb-6 font-medium whitespace-pre-wrap">{error}</div>}
-          {successMsg && <div className="bg-green-50 border-l-4 border-green-500 text-green-900 text-sm p-4 rounded mb-6 font-bold">{successMsg}</div>}
-
-          {mode === 'reset' ? (
-            <form onSubmit={handleResetPassword} className="space-y-6 animate-in fade-in">
-              <div className="space-y-4">
-                <h3 className="text-sm font-bold text-gray-700 border-b pb-2 flex items-center gap-2"><Lock className="w-4 h-4"/> パスワードの再設定</h3>
-                <p className="text-sm text-gray-600">登録したメールアドレスを入力してください。再設定用のリンクをお送りします。</p>
-                <div>
-                  <label className="block text-sm font-bold text-gray-800 mb-1">メールアドレス</label>
-                  <input required type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm transition" placeholder="example@japanyouthcouncil.com" />
-                </div>
-              </div>
-              <button type="submit" disabled={isLoading} className="w-full bg-blue-700 text-white font-bold py-3.5 rounded-lg hover:bg-blue-800 transition shadow-md disabled:opacity-50">
-                {isLoading ? '送信中...' : '再設定リンクを送信'}
-              </button>
-              <div className="text-center mt-4">
-                <button type="button" onClick={() => { setMode('login'); setError(''); setSuccessMsg(''); }} className="text-sm font-bold text-gray-500 hover:text-gray-700 transition">ログイン画面に戻る</button>
-              </div>
-            </form>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-4">
-                <h3 className="text-sm font-bold text-gray-500 border-b pb-2">認証情報</h3>
-                <div>
-                  <label className="block text-sm font-bold text-gray-800 mb-1 flex items-center gap-1.5"><Mail className="w-4 h-4 text-gray-600"/> メールアドレス <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label>
-                  <input required type="email" name="email" value={formData.email} onChange={handleChange} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm transition" placeholder="example@japanyouthcouncil.com" />
-                  {mode === 'register' && <p className="text-[11px] text-gray-600 mt-1.5 ml-1 font-medium">※ <code>@japanyouthcouncil.com</code> のアドレスで登録するとコアメンバー権限が付与されます。</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-800 mb-1 flex items-center gap-1.5"><Lock className="w-4 h-4 text-gray-600"/> パスワード <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label>
-                  <input required type="password" name="password" value={formData.password} onChange={handleChange} minLength={6} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm transition" placeholder="6文字以上の英数字" />
-                  {mode === 'login' && (
-                    <div className="text-right mt-2">
-                      <button type="button" onClick={() => { setMode('reset'); setError(''); setSuccessMsg(''); }} className="text-xs font-bold text-blue-600 hover:text-blue-800 transition">パスワードを忘れた方はこちら</button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {mode === 'register' && (
-                <div className="space-y-6 pt-4 animate-in fade-in duration-300">
-                  <h3 className="text-sm font-bold text-gray-500 border-b pb-2 flex items-center gap-2"><User className="w-4 h-4 text-gray-600"/> 自己紹介プロフィール作成</h3>
-                  
-                  <div>
-                    <label className="block text-xs font-bold text-gray-800 mb-2">プロフィール写真 <span className="text-[10px] bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded">任意</span></label>
-                    <div className="flex items-center gap-4">
-                      {imagePreviewUrl ? (
-                        <div className="relative">
-                          <img src={imagePreviewUrl} alt="Preview" className="w-16 h-16 rounded-full object-cover border border-gray-300 shadow-sm" />
-                          <button type="button" onClick={clearImage} className="absolute -top-1 -right-1 bg-red-500 text-white p-0.5 rounded-full hover:bg-red-600 shadow"><X className="w-3 h-3"/></button>
-                        </div>
-                      ) : (
-                        <div className="w-16 h-16 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center text-gray-500"><User className="w-8 h-8" /></div>
-                      )}
-                      <div className="flex-1">
-                        <input type="file" accept="image/*" onChange={handleImageChange} ref={fileInputRef} className="hidden" id="photo-upload" />
-                        <label htmlFor="photo-upload" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-400 rounded-md text-xs font-bold text-gray-800 cursor-pointer hover:bg-gray-100 transition shadow-sm"><Upload className="w-3 h-3"/> 写真を選択</label>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-800 mb-1">名前（活動名可） <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label>
-                      <input required type="text" name="name" value={formData.name} onChange={handleChange} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-800 mb-1">ふりがな <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label>
-                      <input required type="text" name="furigana" value={formData.furigana} onChange={handleChange} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition" />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-800 mb-1">属性 <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label>
-                      <select name="attribute" value={formData.attribute} onChange={handleChange} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition">
-                        <option value="高校生">高校生</option><option value="大学生">大学生</option><option value="大学院生">大学院生</option><option value="社会人">社会人</option><option value="その他">その他</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-800 mb-1">居住地（都道府県） <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label>
-                      <select name="prefecture" value={formData.prefecture} onChange={handleChange} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition">
-                        {PREFECTURES.map(pref => <option key={pref} value={pref}>{pref}</option>)}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-gray-800 mb-1">居住地（市区町村など）</label>
-                    <input type="text" name="city" value={formData.city} onChange={handleChange} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition" />
-                  </div>
-
-                  <div className="pt-6 border-t mt-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-sm font-bold text-gray-800">所属・参加プロジェクト</h3>
-                      <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-gray-600 hover:text-gray-900 transition">
-                        <input 
-                          type="checkbox" 
-                          checked={showCompleted} 
-                          onChange={(e) => setShowCompleted(e.target.checked)} 
-                          className="w-3.5 h-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer" 
-                        />
-                        終了済みも表示
-                      </label>
-                    </div>
-                    
-                    {renderTreeSection('所属政策委員会', 'policy_committee', committeesList, '政策委員会')}
-                    {renderTreeSection('所属地方支部', 'local_branches', branchesList, '地方支部')}
-                    {renderTreeSection('参加大プロジェクト', 'major_projects', majorProjectsList, '大プロジェクト')}
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-gray-800 mb-1 mt-2">若者協議会で実現したいこと <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">必須</span></label>
-                    <textarea required name="goal" value={formData.goal} onChange={handleChange} rows={3} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"></textarea>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-800 mb-1">協議会以外での活動・所属</label>
-                    <input type="text" name="outside_activities" value={formData.outside_activities} onChange={handleChange} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-800 mb-1">個人SNS各種リンク</label>
-                    <input type="text" name="sns_links" value={formData.sns_links} onChange={handleChange} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-800 mb-1">自由記述（趣味・特技など）</label>
-                    <textarea name="free_text" value={formData.free_text} onChange={handleChange} rows={2} className="w-full bg-white text-black font-semibold border border-gray-300 p-2.5 rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"></textarea>
-                  </div>
-                </div>
-              )}
-
-              <button type="submit" disabled={isLoading} className="w-full bg-blue-700 text-white font-bold py-3.5 rounded-lg hover:bg-blue-800 transition flex items-center justify-center gap-2 shadow-md mt-6 disabled:opacity-50">
-                {isLoading ? '処理中...' : mode === 'login' ? 'ログインして開始' : 'プロフィールを登録してアカウント開設'}
-                {!isLoading && <ArrowRight className="w-4 h-4"/>}
-              </button>
-            </form>
-          )}
+          <button 
+            onClick={handleGoogleLogin} 
+            disabled={isLoading}
+            className="w-full bg-white border-2 border-gray-200 text-gray-800 font-bold py-3.5 rounded-lg hover:bg-gray-50 transition flex items-center justify-center gap-3 shadow-sm disabled:opacity-50"
+          >
+            {/* GoogleのGマークアイコンを簡易的に配置 */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M22.56 12.25C22.56 11.47 22.49 10.72 22.36 10H12V14.26H17.92C17.67 15.63 16.89 16.81 15.74 17.58V20.34H19.3C21.38 18.42 22.56 15.6 22.56 12.25Z" fill="#4285F4"/>
+              <path d="M12 23C14.97 23 17.46 22.02 19.3 20.34L15.74 17.58C14.75 18.25 13.48 18.65 12 18.65C9.13 18.65 6.7 16.71 5.82 14.11H2.15V16.96C3.96 20.55 7.69 23 12 23Z" fill="#34A853"/>
+              <path d="M5.82 14.11C5.59 13.44 5.46 12.73 5.46 12C5.46 11.27 5.59 10.56 5.82 9.89V7.04H2.15C1.4 8.53 1 10.22 1 12C1 13.78 1.4 15.47 2.15 16.96L5.82 14.11Z" fill="#FBBC05"/>
+              <path d="M12 5.35C13.62 5.35 15.06 5.91 16.2 7.01L19.37 3.84C17.45 2.05 14.96 1 12 1C7.69 1 3.96 3.45 2.15 7.04L5.82 9.89C6.7 7.29 9.13 5.35 12 5.35Z" fill="#EA4335"/>
+            </svg>
+            {isLoading ? '接続中...' : 'Googleでログイン・新規登録'}
+          </button>
         </div>
       </div>
     </div>
