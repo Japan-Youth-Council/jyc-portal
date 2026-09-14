@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description: 'Japan Youth Council Portal System',
   // ★追加：Google Search Consoleの所有権確認用メタタグを設定
   verification: {
-    google: 'google-site-verification: google49b5079e0698d023.html', 
+    google: '<meta name="google-site-verification" content="QGiDGPph8jmGBUGAzO_NW4mQ4FE0Dam2IwXSIJ1r1W8" />', 
   },
 };
 
