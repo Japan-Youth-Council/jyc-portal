@@ -9,9 +9,9 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'JYC Portal',
   description: 'Japan Youth Council Portal System',
-  // ★追加：Google Search Consoleの所有権確認用メタタグを設定
+  // ★修正：contentの中身の文字列だけを指定する
   verification: {
-    google: '<meta name="google-site-verification" content="QGiDGPph8jmGBUGAzO_NW4mQ4FE0Dam2IwXSIJ1r1W8" />', 
+    google: 'QGiDGPph8jmGBUGAzO_NW4mQ4FE0Dam2IwXSIJ1r1W8', 
   },
 };
 
