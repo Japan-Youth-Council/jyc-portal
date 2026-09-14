@@ -58,7 +58,7 @@ export default function Home() {
           <Link href="/knowledge" className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-purple-300 transition-all group block">
             <BookOpen className="w-10 h-10 text-purple-500 mb-4 group-hover:scale-110 transition-transform" />
             <h3 className="text-lg font-bold mb-2 text-gray-900">政策ナレッジ</h3>
-            <p className="text-xs text-gray-500 leading-relaxed font-medium">政策テーマ別のドキュメント、マニュアル、ノウハウなどの情報を管理します。（準備中）</p>
+            <p className="text-xs text-gray-500 leading-relaxed font-medium">政策テーマ別のドキュメント、マニュアル、ノウハウなどの情報を管理します。</p>
           </Link>
           
         </div>

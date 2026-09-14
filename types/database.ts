@@ -11,6 +11,7 @@ export interface Knowledge {
   category_id: number | null;
   title: string;
   content: string;
+  tags: string[];
   author_name: string;
   updated_at: string;
   created_at: string;
