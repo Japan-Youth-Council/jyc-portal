@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { MoreVertical, Trash2, GitMerge, Plus, Edit2, User, FileText, Link as LinkIcon, Building2, MapPin, X, Search, ChevronDown, ChevronRight, Globe, PanelLeft } from 'lucide-react'; // ★ Menu を PanelLeft に変更
+import { MoreVertical, Trash2, GitMerge, Plus, Edit2, User, FileText, Link as LinkIcon, Building2, MapPin, X, Search, ChevronDown, ChevronRight, Globe, PanelLeft, Star } from 'lucide-react';
 
 type Target = { id: number; category: string; region: string | null; name: string; sort_order: number };
-type ContactRecord = { id: number; target_id: number; date: string; title: string; content: string; jyc_attendees: string; target_attendees: string[]; linked_target_ids: number[]; document_urls: string[]; minutes_url: string; hp_article_url: string; author_name: string; created_at: string };
+type ContactRecord = { id: number; target_id: number; date: string; title: string; content: string; jyc_attendees: any; target_attendees: string[]; linked_target_ids: number[]; document_urls: string[]; minutes_url: string; hp_article_url: string; author_name: string; created_at: string };
+type Profile = { id: string; name: string; furigana?: string; attribute?: string; prefecture?: string; city?: string; photo_url?: string; is_core_member?: boolean };
 
 const CATEGORIES = ['国政', '中央行政', '地方', '個人', 'その他'];
 
@@ -17,13 +18,14 @@ export default function ContactsPage() {
   const [records, setRecords] = useState<ContactRecord[]>([]);
   const [activeTarget, setActiveTarget] = useState<Target | null>(null);
   
+  const [jycMembers, setJycMembers] = useState<Profile[]>([]);
+  
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({'国政': true, '中央行政': true, '地方': true, '個人': true, 'その他': true});
   const [openRegions, setOpenRegions] = useState<Record<string, boolean>>({});
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ContactRecord[]>([]);
 
-  // スマホ用サイドバーの開閉状態
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTargetId, setEditingTargetId] = useState<number | null>(null);
@@ -36,6 +38,15 @@ export default function ContactsPage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const attendeeInputRef = useRef<HTMLInputElement>(null);
 
+  const [jycAttendees, setJycAttendees] = useState<string[]>([]);
+  const [jycSearchText, setJycSearchText] = useState('');
+  const [showJycSuggestions, setShowJycSuggestions] = useState(false);
+  const jycInputRef = useRef<HTMLInputElement>(null);
+
+  // ★ 追加: ポップアップ用ステート
+  const [selectedJycMember, setSelectedJycMember] = useState<Profile | null>(null);
+  const [isMemberLoading, setIsMemberLoading] = useState(false);
+
   useEffect(() => {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -44,6 +55,7 @@ export default function ContactsPage() {
         setCurrentAuthorName(session.user.user_metadata?.full_name || '名称未設定');
       }
       fetchTargets();
+      fetchJycMembers();
     };
     init();
   }, []);
@@ -58,7 +70,7 @@ export default function ContactsPage() {
         const { data } = await supabase
           .from('contact_records')
           .select('*')
-          .or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%,jyc_attendees.ilike.%${searchQuery}%`)
+          .or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%,jyc_attendees.cs.{${searchQuery}}`)
           .order('date', { ascending: false })
           .order('created_at', { ascending: false });
         if (data) setSearchResults(data);
@@ -72,6 +84,12 @@ export default function ContactsPage() {
   const fetchTargets = async () => {
     const { data } = await supabase.from('contact_targets').select('*').order('sort_order', { ascending: true }).order('created_at', { ascending: false });
     if (data) setTargets(data);
+  };
+
+  const fetchJycMembers = async () => {
+    // 簡易版として基本情報のみ取得
+    const { data } = await supabase.from('profiles').select('id, name, attribute, prefecture, city, photo_url, is_core_member, furigana').not('name', 'is', null);
+    if (data) setJycMembers(data);
   };
 
   const fetchRecords = async (targetId: number) => {
@@ -159,6 +177,42 @@ export default function ContactsPage() {
     }
   };
 
+  const jycSuggestions = jycSearchText
+    ? jycMembers.filter(m => m.name.toLowerCase().includes(jycSearchText.toLowerCase()))
+    : jycMembers;
+  
+  const handleAddJycAttendee = (name: string) => {
+    if (!name.trim()) return;
+    const isValidMember = jycMembers.some(m => m.name === name.trim());
+    if (!isValidMember) {
+      alert('ポータルに登録されているメンバーのみ追加できます。');
+      return;
+    }
+    
+    if (!jycAttendees.includes(name.trim())) {
+      setJycAttendees([...jycAttendees, name.trim()]);
+    }
+    setJycSearchText('');
+    setShowJycSuggestions(false);
+    setTimeout(() => jycInputRef.current?.focus(), 0);
+  };
+
+  const handleJycKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === 'Tab') {
+      if (jycSearchText.trim() && jycSuggestions.length > 0) {
+        e.preventDefault();
+        handleAddJycAttendee(jycSuggestions[0].name);
+      }
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (jycSearchText.trim() && jycSuggestions.length > 0) {
+        handleAddJycAttendee(jycSuggestions[0].name);
+      }
+    }
+  };
+
   const handleAddDocUrl = () => {
     const current = formData.document_urls || [];
     setFormData({ ...formData, document_urls: [...current, ''] });
@@ -201,6 +255,7 @@ export default function ContactsPage() {
         document_urls: filteredUrls,
         target_id: activeTarget.id,
         target_attendees: targetAttendees,
+        jyc_attendees: jycAttendees, 
         linked_target_ids: linkedIds,
         author_name: currentAuthorName,
       };
@@ -233,11 +288,28 @@ export default function ContactsPage() {
     if (record) {
       setFormData(record);
       setTargetAttendees(record.target_attendees || []);
+      
+      // ★ 配列やJSON形式から純粋な文字列配列に変換する安全な処理
+      let parsedJycAttendees: string[] = [];
+      try {
+        if (Array.isArray(record.jyc_attendees)) {
+          parsedJycAttendees = record.jyc_attendees.map(item => String(item).replace(/[\[\]"]/g, '').trim());
+        } else if (typeof record.jyc_attendees === 'string') {
+          // '["名前"]' のような文字列だった場合、記号を消してカンマで分ける
+          parsedJycAttendees = record.jyc_attendees.replace(/[\[\]"]/g, '').split(',').map(s => s.trim()).filter(s => s);
+        }
+      } catch(e) {
+        parsedJycAttendees = [];
+      }
+      setJycAttendees(parsedJycAttendees);
+      
     } else {
-      setFormData({ date: new Date().toISOString().split('T')[0], title: '', content: '', jyc_attendees: '', document_urls: [], minutes_url: '', hp_article_url: '' });
+      setFormData({ date: new Date().toISOString().split('T')[0], title: '', content: '', document_urls: [], minutes_url: '', hp_article_url: '' });
       setTargetAttendees([]);
+      setJycAttendees([]);
     }
     setAttendeeSearchText('');
+    setJycSearchText('');
     setIsFormOpen(true);
   };
 
@@ -260,6 +332,19 @@ export default function ContactsPage() {
     for (let i = 0; i < newGroup.length; i++) {
       await supabase.from('contact_targets').update({ sort_order: i }).eq('id', newGroup[i].id);
     }
+  };
+
+  // ★ 追加: 名前クリック時の処理
+  const handleJycMemberClick = async (name: string) => {
+    setIsMemberLoading(true);
+    // Membersにキャッシュがあればそれを使う、なければ空表示
+    const member = jycMembers.find(m => m.name === name);
+    if (member) {
+      setSelectedJycMember(member);
+    } else {
+      setSelectedJycMember({ id: 'dummy', name: name }); // 未登録メンバーの場合の保険
+    }
+    setIsMemberLoading(false);
   };
 
   const renderTargetItem = (target: Target, cat: string) => (
@@ -312,6 +397,18 @@ export default function ContactsPage() {
 
   const renderRecordCard = (record: ContactRecord, isSearchResult = false) => {
     const targetInfo = targets.find(t => t.id === record.target_id);
+    
+    // ★ 表示用のクリーンアップ処理（["名前"]のようなものを綺麗にする）
+    let jycAttendeesList: string[] = [];
+    try {
+      if (Array.isArray(record.jyc_attendees)) {
+        jycAttendeesList = record.jyc_attendees.map(item => String(item).replace(/[\[\]"]/g, '').trim());
+      } else if (typeof record.jyc_attendees === 'string') {
+        jycAttendeesList = record.jyc_attendees.replace(/[\[\]"]/g, '').split(',').map(s => s.trim()).filter(s => s);
+      }
+    } catch(e) {
+      jycAttendeesList = [];
+    }
 
     return (
       <div key={record.id} className="relative pl-6 md:pl-8 group">
@@ -342,15 +439,34 @@ export default function ContactsPage() {
           <h3 className="font-bold text-gray-800 text-base md:text-lg mb-3 leading-snug">{record.title}</h3>
           {record.content && <p className="text-gray-600 text-sm whitespace-pre-wrap leading-relaxed mb-4">{record.content}</p>}
 
-          <div className="bg-gray-50 p-3 rounded-lg text-xs space-y-2 mb-4 border border-gray-100">
+          <div className="bg-gray-50 p-3 rounded-lg text-xs space-y-3 mb-4 border border-gray-100">
             <div className="flex items-start gap-2">
-              <span className="font-bold text-gray-500 w-16 shrink-0">先方出席:</span>
+              <span className="font-bold text-gray-500 w-16 shrink-0 mt-0.5">先方出席:</span>
               <div className="flex flex-wrap gap-1">
-                {record.target_attendees?.map((a, i) => <span key={i} className="bg-white border text-gray-700 px-2 py-0.5 rounded-full shadow-sm">{a}</span>)}
-                {(!record.target_attendees || record.target_attendees.length === 0) && <span className="text-gray-400">記載なし</span>}
+                {record.target_attendees?.map((a, i) => <span key={i} className="bg-white border border-gray-200 text-gray-700 px-2 py-0.5 rounded-md shadow-sm font-medium">{a}</span>)}
+                {(!record.target_attendees || record.target_attendees.length === 0) && <span className="text-gray-400 mt-0.5">記載なし</span>}
               </div>
             </div>
-            <div className="flex items-start gap-2"><span className="font-bold text-gray-500 w-16 shrink-0">JYC出席:</span><span className="text-gray-700">{record.jyc_attendees || '記載なし'}</span></div>
+            
+            <div className="flex items-start gap-2 border-t border-gray-200 pt-2">
+              <span className="font-bold text-gray-500 w-16 shrink-0 mt-0.5">JYC出席:</span>
+              <div className="flex flex-wrap gap-1">
+                {jycAttendeesList.length > 0 ? (
+                  jycAttendeesList.map((a, i) => (
+                    // ★ クリックできるようにボタン化
+                    <button 
+                      key={i} 
+                      onClick={() => handleJycMemberClick(a)}
+                      className="bg-blue-50 hover:bg-blue-100 border border-blue-100 text-blue-700 px-2 py-0.5 rounded-md shadow-sm font-bold transition flex items-center gap-1"
+                    >
+                      <User className="w-3 h-3" /> {a}
+                    </button>
+                  ))
+                ) : (
+                  <span className="text-gray-400 mt-0.5">記載なし</span>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="flex gap-3 text-sm flex-wrap">
@@ -552,6 +668,7 @@ export default function ContactsPage() {
             </div>
             <div><label className="block text-xs font-bold text-gray-500 mb-1">件名 / トピック</label><input type="text" required placeholder="例: こども家庭庁 ヒアリング、意見交換など" value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full border p-2 rounded text-sm outline-none" /></div>
             
+            {/* 相手方出席者 */}
             <div className="relative">
               <label className="block text-xs font-bold text-blue-600 mb-1 flex items-center gap-1"><User className="w-3 h-3"/> 相手方出席者（Tabキーで自動入力）</label>
               <div className="w-full border rounded p-2 bg-white flex flex-wrap gap-2 items-center focus-within:border-blue-400 min-h-[42px]">
@@ -595,7 +712,47 @@ export default function ContactsPage() {
               <p className="text-[10px] text-gray-400 mt-1">※Tabキーを押すと最上位の候補が決定されます。新しい人を追加する場合はそのままEnterを押してください。</p>
             </div>
 
-            <div><label className="block text-xs font-bold text-gray-500 mb-1">JYC側出席者</label><input type="text" placeholder="例: 山田, 佐藤, 鈴木" value={formData.jyc_attendees || ''} onChange={e => setFormData({...formData, jyc_attendees: e.target.value})} className="w-full border p-2 rounded text-sm outline-none" /></div>
+            {/* JYC側出席者 (新しいUI) */}
+            <div className="relative">
+              <label className="block text-xs font-bold text-gray-500 mb-1 flex items-center gap-1"><User className="w-3 h-3"/> JYC側出席者（登録メンバーから検索）</label>
+              <div className="w-full border rounded p-2 bg-white flex flex-wrap gap-2 items-center focus-within:border-gray-400 min-h-[42px]">
+                {jycAttendees.map(attendee => (
+                  <span key={attendee} className="bg-gray-100 text-gray-700 px-2 py-1 rounded-md text-xs font-bold flex items-center gap-1 shadow-sm border border-gray-200">
+                    {attendee} <button type="button" onClick={() => setJycAttendees(jycAttendees.filter(a => a !== attendee))} className="hover:text-red-500"><X className="w-3 h-3"/></button>
+                  </span>
+                ))}
+                <input 
+                  type="text" 
+                  ref={jycInputRef}
+                  value={jycSearchText} 
+                  onChange={e => {
+                    setJycSearchText(e.target.value);
+                    setShowJycSuggestions(true);
+                  }} 
+                  onFocus={() => setShowJycSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowJycSuggestions(false), 200)} 
+                  onKeyDown={handleJycKeyDown} 
+                  placeholder={jycAttendees.length === 0 ? "メンバー名を入力..." : ""} 
+                  className="flex-1 outline-none text-sm bg-transparent min-w-[120px]" 
+                />
+              </div>
+
+              {showJycSuggestions && jycSearchText && (
+                <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-xl max-h-48 overflow-y-auto">
+                  <ul className="py-1">
+                    {jycSuggestions.length > 0 ? (
+                      jycSuggestions.map(m => (
+                        <li key={m.id} onClick={() => handleAddJycAttendee(m.name)} className="px-3 py-2 hover:bg-gray-50 text-sm cursor-pointer flex items-center gap-2 text-gray-700 font-bold">
+                          <User className="w-3 h-3 text-gray-400"/> {m.name}
+                        </li>
+                      ))
+                    ) : (
+                      <li className="px-3 py-3 text-xs text-gray-400 text-center">一致するメンバーが見つかりません</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
             
             <div><label className="block text-xs font-bold text-gray-500 mb-1">議事録・交渉メモ (任意)</label><textarea rows={6} placeholder="どのような内容が話されたか、手応えはどうだったか..." value={formData.content || ''} onChange={e => setFormData({...formData, content: e.target.value})} className="w-full border p-2 rounded text-sm outline-none resize-none" /></div>
             
@@ -635,6 +792,7 @@ export default function ContactsPage() {
         </div>
       )}
 
+      {/* 統合用モーダル */}
       {mergeData && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] backdrop-blur-sm p-4">
           <div className="bg-white p-6 rounded-xl w-full max-w-[400px] shadow-2xl">
@@ -654,6 +812,45 @@ export default function ContactsPage() {
             <div className="flex justify-end gap-3">
               <button onClick={() => setMergeData(null)} className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded">キャンセル</button>
               <button onClick={executeMerge} disabled={!mergeData.to} className="px-4 py-2 text-sm font-bold bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">統合を実行</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ★ 追加: メンバー詳細ポップアップ */}
+      {selectedJycMember && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] backdrop-blur-sm p-4 animate-in fade-in" onClick={() => setSelectedJycMember(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+            <div className="relative h-24 bg-gray-100 flex items-center justify-center border-b">
+              {selectedJycMember.photo_url ? (
+                <img src={selectedJycMember.photo_url} alt="" className="absolute inset-0 w-full h-full object-cover opacity-80 blur-sm" />
+              ) : (
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-100 to-indigo-50" />
+              )}
+              <button onClick={() => setSelectedJycMember(null)} className="absolute top-3 right-3 bg-white/50 hover:bg-white text-gray-700 p-1.5 rounded-full transition shadow-sm z-10"><X className="w-4 h-4"/></button>
+              
+              <div className="absolute -bottom-10 border-4 border-white rounded-full bg-white shadow-md">
+                {selectedJycMember.photo_url ? (
+                  <img src={selectedJycMember.photo_url} alt={selectedJycMember.name} className="w-20 h-20 rounded-full object-cover" />
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-gray-400"><User className="w-10 h-10"/></div>
+                )}
+              </div>
+            </div>
+            
+            <div className="pt-12 pb-6 px-6 text-center">
+              <h3 className="text-xl font-bold text-gray-900">{selectedJycMember.name}</h3>
+              {selectedJycMember.furigana && <p className="text-xs text-gray-500 mt-0.5">{selectedJycMember.furigana}</p>}
+              
+              <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+                {selectedJycMember.is_core_member && <span className="bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5 border border-yellow-200"><Star className="w-3 h-3 fill-current"/> コアメンバー</span>}
+                {selectedJycMember.attribute && <span className="bg-gray-100 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-gray-200">{selectedJycMember.attribute}</span>}
+                {selectedJycMember.prefecture && <span className="bg-gray-100 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-gray-200">{selectedJycMember.prefecture}{selectedJycMember.city && ` ${selectedJycMember.city}`}</span>}
+              </div>
+              
+              {!selectedJycMember.attribute && selectedJycMember.id !== 'dummy' && (
+                <p className="text-xs text-gray-400 mt-4">プロフィール未設定、または読込中...</p>
+              )}
             </div>
           </div>
         </div>
