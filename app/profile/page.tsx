@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { User, Upload, X, Save, Lock, CheckCircle2 } from 'lucide-react';
+import { User, Upload, X, Save, Mail } from 'lucide-react'; 
 import imageCompression from 'browser-image-compression';
 
 const PREFECTURES = [
@@ -20,15 +20,6 @@ export default function ProfileEditPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState({ text: '', isError: false });
 
-  const [authEmail, setAuthEmail] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [unlockError, setUnlockError] = useState('');
-  const [isUnlocking, setIsUnlocking] = useState(false);
-
-  // ▼ 終了済みを表示するかどうかの状態を追加
   const [showCompleted, setShowCompleted] = useState(false);
 
   const [committeesList, setCommitteesList] = useState<any[]>([]);
@@ -50,13 +41,48 @@ export default function ProfileEditPage() {
     const fetchProfileAndOptions = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
-        router.push('/login');
+        router.push('/');
         return;
       }
-      setUser(session.user);
-      setAuthEmail(session.user.email || '');
+      
+      let currentUser = session.user;
 
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+      // ==========================================
+      // ▼ 古いGoogleアカウントの自動解除（すり替え）ロジック ▼
+      // ==========================================
+      const oldIdentityId = localStorage.getItem('pending_unlink_identity_id');
+      if (oldIdentityId && currentUser.identities) {
+        // 現在リンクされているGoogleアカウントをすべて取得
+        const googleIdentities = currentUser.identities.filter(id => id.provider === 'google');
+        
+        // Googleアカウントが2つ以上ある（＝新しいアカウントが無事に追加された）場合のみ実行
+        if (googleIdentities.length > 1) {
+          const identityToUnlink = currentUser.identities.find(id => id.identity_id === oldIdentityId);
+          if (identityToUnlink) {
+            // 古いアカウントの連携を解除
+            const { error: unlinkError } = await supabase.auth.unlinkIdentity(identityToUnlink);
+            if (!unlinkError) {
+              // 解除成功したらフラグを消し、セッションを最新化する
+              localStorage.removeItem('pending_unlink_identity_id');
+              const { data: refreshedData } = await supabase.auth.refreshSession();
+              if (refreshedData.session) {
+                currentUser = refreshedData.session.user;
+                setMessage({ text: 'ログイン用のGoogleアカウントを変更しました。', isError: false });
+              }
+            } else {
+              console.error("Unlink error:", unlinkError);
+            }
+          }
+        } else {
+          // 認証をキャンセルした、あるいは全く同じアカウントを選んだ場合は、フラグだけ消して何もしない
+          localStorage.removeItem('pending_unlink_identity_id');
+        }
+      }
+      // ==========================================
+
+      setUser(currentUser);
+
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
       if (data) {
         setFormData({
           name: data.name || '', furigana: data.furigana || '', attribute: data.attribute || '大学生',
@@ -69,7 +95,6 @@ export default function ProfileEditPage() {
         if (data.photo_url) setImagePreviewUrl(data.photo_url);
       }
 
-      // プロジェクト一覧側と同じく作成日順等でベースを取得
       const { data: cData } = await supabase.from('policy_committees').select('*').order('created_at');
       const { data: bData } = await supabase.from('local_branches').select('*').order('created_at');
       const { data: mData } = await supabase.from('major_projects').select('*').order('created_at');
@@ -119,14 +144,35 @@ export default function ProfileEditPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleUnlock = async () => {
-    if (!currentPassword) return;
-    setIsUnlocking(true);
-    setUnlockError('');
-    const { error } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword });
-    if (error) setUnlockError('パスワードが間違っています。');
-    else { setIsUnlocked(true); setCurrentPassword(''); }
-    setIsUnlocking(false);
+  // ▼ 確認メールなしで直接Googleアカウントを【変更】する処理
+  const handleChangeGoogleAccount = async () => {
+    try {
+      if (!user?.identities) return;
+      
+      // 現在のGoogleアカウントのIDを探す
+      const currentGoogleIdentity = user.identities.find((id: any) => id.provider === 'google');
+      
+      if (currentGoogleIdentity) {
+        // リダイレクト前に、消すべき古いIDをブラウザに記憶させておく
+        localStorage.setItem('pending_unlink_identity_id', currentGoogleIdentity.identity_id);
+      }
+
+      // 新しいアカウントを連携しにGoogleへ飛ぶ
+      const { error } = await supabase.auth.linkIdentity({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.href, // 認証後にこのページに戻ってくる
+          queryParams: {
+            prompt: 'select_account' // 既にログイン済みでも強制的にアカウント選択画面を出す
+          }
+        }
+      });
+      if (error) throw error;
+      
+    } catch (err: any) {
+      alert('Googleアカウントの連携画面への移行に失敗しました: ' + err.message);
+      localStorage.removeItem('pending_unlink_identity_id'); // 失敗時はフラグを消す
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -136,16 +182,6 @@ export default function ProfileEditPage() {
     setMessage({ text: '', isError: false });
 
     try {
-      let authMessage = '';
-      if (isUnlocked && (authEmail !== user.email || newPassword)) {
-        const updateData: any = {};
-        if (authEmail !== user.email) updateData.email = authEmail;
-        if (newPassword) updateData.password = newPassword;
-        const { error: authError } = await supabase.auth.updateUser(updateData);
-        if (authError) throw authError;
-        if (authEmail !== user.email) authMessage = ' ※メールアドレス変更の確認メールを新旧両方のアドレスに送信しました。';
-      }
-
       let finalPhotoUrl = formData.photo_url;
       if (profileImage) {
         const uploadData = new FormData();
@@ -156,7 +192,8 @@ export default function ProfileEditPage() {
         finalPhotoUrl = data.url;
       }
 
-      const isCore = authEmail.endsWith('@japanyouthcouncil.com');
+      // ドメインベースでのコアメンバー判定（現在のメインアドレスで判定）
+      const isCore = user.email?.endsWith('@japanyouthcouncil.com') || false;
 
       const { error: dbError } = await supabase.from('profiles').update({
         name: formData.name, furigana: formData.furigana, attribute: formData.attribute,
@@ -172,9 +209,9 @@ export default function ProfileEditPage() {
 
       await supabase.auth.updateUser({ data: { full_name: formData.name, avatar_url: finalPhotoUrl } });
 
-      setMessage({ text: 'プロフィールを更新しました。' + authMessage, isError: false });
-      if (newPassword) { setNewPassword(''); setIsUnlocked(false); }
+      setMessage({ text: 'プロフィールを更新しました。', isError: false });
       setTimeout(() => window.location.reload(), 2000);
+      
     } catch (err: any) {
       setMessage({ text: '更新に失敗しました: ' + err.message, isError: true });
     } finally {
@@ -182,12 +219,9 @@ export default function ProfileEditPage() {
     }
   };
 
-  // ▼ ツリー構造のレンダリング（終了済みのフィルタリング処理を追加）
   const renderTreeSection = (title: string, parentField: keyof typeof formData, parents: any[], parentTypeStr: string) => {
-    // 親要素をフィルタリング
     const visibleParents = parents.filter(parent => {
       const isParentChecked = formData[parentField] ? String(formData[parentField]).split(',').includes(parent.name) : false;
-      // 終了済み ＆ チェックされていない ＆ 表示設定オフ なら隠す
       if (!showCompleted && parent.status === '終了済み' && !isParentChecked) return false;
       return true;
     });
@@ -201,7 +235,6 @@ export default function ProfileEditPage() {
           {visibleParents.map(parent => {
             const isParentChecked = formData[parentField] ? String(formData[parentField]).split(',').includes(parent.name) : false;
             
-            // 子要素をフィルタリング
             const children = projectsList.filter(p => p.parent_type === parentTypeStr && p.parent_name === parent.name);
             const visibleChildren = children.filter(child => {
               const isChildChecked = formData.projects ? String(formData.projects).split(',').includes(child.name) : false;
@@ -256,46 +289,26 @@ export default function ProfileEditPage() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           
+          {/* ▼ Googleアカウント変更セクション ▼ */}
           <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 mb-8">
-            <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2"><Lock className="w-4 h-4"/> ログイン・アカウント設定</h3>
-            
-            {!isUnlocked ? (
-              <div className="space-y-4">
-                <p className="text-xs text-gray-600 mb-2">メールアドレスやパスワードを変更するには、現在のパスワードを入力してロックを解除してください。</p>
-                {unlockError && <p className="text-xs text-red-600 font-bold bg-red-50 p-2 rounded">{unlockError}</p>}
-                
-                <div className="flex gap-2">
-                  <input 
-                    type="password" 
-                    value={currentPassword} 
-                    onChange={(e) => setCurrentPassword(e.target.value)} 
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleUnlock(); } }}
-                    placeholder="現在のパスワード" 
-                    className="flex-1 border border-gray-300 p-2.5 rounded-lg text-sm text-gray-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-white" 
-                  />
-                  <button type="button" onClick={handleUnlock} disabled={!currentPassword || isUnlocking} className="bg-blue-600 text-white text-sm font-bold px-5 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 shrink-0 shadow-sm">
-                    {isUnlocking ? '確認中...' : 'ロック解除'}
+            <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2"><Mail className="w-4 h-4"/> ログイン用Googleアカウント</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-800 mb-1">現在のアドレス</label>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-gray-300 p-3 rounded-lg">
+                  {/* user.email はトップレベルで更新されない場合があるため、identities から最新のものを取得して表示 */}
+                  <span className="text-sm text-gray-900 font-bold">
+                    {user?.identities?.find((id: any) => id.provider === 'google')?.identity_data?.email || user?.email}
+                  </span>
+                  <button type="button" onClick={handleChangeGoogleAccount} className="shrink-0 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold py-2 px-4 rounded transition border border-blue-200 shadow-sm">
+                    別のアカウントに変更する
                   </button>
                 </div>
+                <p className="text-[11px] text-gray-500 mt-2 leading-relaxed">
+                  ※ボタンを押すとGoogleの認証画面が開きます。新しいアカウントを選択するだけで即座に変更が完了し、古いアカウントでのログインはできなくなります。
+                </p>
               </div>
-            ) : (
-              <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                <div className="flex items-center justify-between bg-green-50 px-3 py-2 rounded-md border border-green-200">
-                  <p className="text-xs text-green-700 font-bold flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4"/> ロック解除済み</p>
-                  <button type="button" onClick={() => setIsUnlocked(false)} className="text-xs text-gray-500 hover:text-gray-700 font-bold underline">キャンセル</button>
-                </div>
-                
-                <div>
-                  <label className="block text-xs font-bold text-gray-800 mb-1">新しいメールアドレス</label>
-                  <input required type="email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} className="w-full border border-gray-300 p-2.5 rounded-lg text-sm text-gray-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-white" />
-                  <p className="text-[11px] text-gray-500 mt-1">※変更した場合は、セキュリティのため新しいアドレスと古いアドレスの両方に確認メールが送信されます。</p>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-800 mb-1">パスワードの変更</label>
-                  <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} minLength={6} placeholder="変更する場合のみ入力（6文字以上）" className="w-full border border-gray-300 p-2.5 rounded-lg text-sm text-gray-900 font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-white" />
-                </div>
-              </div>
-            )}
+            </div>
           </div>
 
           <h3 className="text-sm font-bold text-gray-500 border-b pb-2 mb-4">公開プロフィール情報</h3>
@@ -340,7 +353,6 @@ export default function ProfileEditPage() {
 
           <div><label className="block text-xs font-bold text-gray-800 mb-1">居住地（市区町村など）</label><input type="text" name="city" value={formData.city} onChange={handleChange} className="w-full border border-gray-300 p-2.5 rounded-lg text-sm text-gray-900 font-medium" /></div>
 
-          {/* ▼ 所属プロジェクトのエリア（ここにトグルボタンを追加） */}
           <div className="pt-6 border-t mt-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-gray-800">所属・参加プロジェクト設定</h3>
