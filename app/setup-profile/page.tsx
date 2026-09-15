@@ -47,7 +47,6 @@ export default function SetupProfilePage() {
       setUserId(session.user.id);
       setEmail(session.user.email || '');
 
-      // ★修正: データベースに既存のプロフィールデータがあるか確認
       const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
@@ -55,7 +54,6 @@ export default function SetupProfilePage() {
         .single();
 
       if (profileData) {
-        // 既存データがある場合はそれを優先
         setFormData({
           name: profileData.name || '', 
           furigana: profileData.furigana || '', 
@@ -76,7 +74,6 @@ export default function SetupProfilePage() {
           setImagePreviewUrl(profileData.photo_url);
         }
       } else {
-        // 既存データがない場合のみ、Googleからの情報を初期値としてセット
         setFormData(prev => ({
           ...prev,
           name: session.user.user_metadata?.full_name || '',
@@ -87,12 +84,11 @@ export default function SetupProfilePage() {
         }
       }
 
-      // プロジェクト一覧の取得
       const { data: cData } = await supabase.from('policy_committees').select('*').order('created_at');
       const { data: bData } = await supabase.from('local_branches').select('*').order('created_at');
       const { data: mData } = await supabase.from('major_projects').select('*').order('created_at');
       const { data: pData } = await supabase.from('projects').select('*').order('created_at');
-      
+
       if (cData) setCommitteesList(cData);
       if (bData) setBranchesList(bData);
       if (mData) setMajorProjectsList(mData);
@@ -157,7 +153,6 @@ export default function SetupProfilePage() {
 
       const { error: dbError } = await supabase.from('profiles').upsert({
         id: userId,
-        email: email,
         name: formData.name, 
         furigana: formData.furigana, 
         attribute: formData.attribute,
@@ -172,8 +167,7 @@ export default function SetupProfilePage() {
         outside_activities: formData.outside_activities,
         free_text: formData.free_text, 
         photo_url: finalPhotoUrl,
-        is_core_member: isCore,
-        updated_at: new Date().toISOString(),
+        is_core_member: isCore
       });
 
       if (dbError) throw dbError;
@@ -207,14 +201,14 @@ export default function SetupProfilePage() {
         <div className="p-4 bg-gray-50 border border-gray-300 rounded-xl space-y-4">
           {visibleParents.map(parent => {
             const isParentChecked = formData[parentField] ? String(formData[parentField]).split(',').includes(parent.name) : false;
-            
+
             const children = projectsList.filter(p => p.parent_type === parentTypeStr && p.parent_name === parent.name);
             const visibleChildren = children.filter(child => {
               const isChildChecked = formData.projects ? String(formData.projects).split(',').includes(child.name) : false;
               if (!showCompleted && child.status === '終了済み' && !isChildChecked) return false;
               return true;
             });
-            
+
             return (
               <div key={parent.name} className="space-y-1.5">
                 <label className={`flex items-center gap-2 text-sm cursor-pointer transition ${parent.status === '進行中' ? 'text-black font-bold hover:text-blue-600' : 'text-gray-900'}`}>
@@ -222,7 +216,7 @@ export default function SetupProfilePage() {
                   <span className={parent.status === '終了済み' ? 'opacity-80' : ''}>{parent.name}</span>
                   {parent.status !== '進行中' && <span className="text-[10px] bg-gray-200 text-black px-1.5 py-0.5 rounded font-bold">{parent.status}</span>}
                 </label>
-                
+
                 {visibleChildren.length > 0 && (
                   <div className="pl-6 space-y-1.5 border-l-2 border-gray-300 ml-2 mt-1">
                     {visibleChildren.map(child => {
@@ -277,7 +271,6 @@ export default function SetupProfilePage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* ★修正: required 属性を明示的に付与 */}
             <div><label className="block text-sm font-bold text-black mb-1">名前 <span className="text-red-500">*</span></label><input required type="text" name="name" value={formData.name} onChange={handleChange} className="w-full border border-gray-400 p-2.5 rounded-lg text-sm text-black font-bold" /></div>
             <div><label className="block text-sm font-bold text-black mb-1">ふりがな <span className="text-red-500">*</span></label><input required type="text" name="furigana" value={formData.furigana} onChange={handleChange} className="w-full border border-gray-400 p-2.5 rounded-lg text-sm text-black font-bold" /></div>
           </div>
@@ -312,7 +305,7 @@ export default function SetupProfilePage() {
                 終了済みも表示
               </label>
             </div>
-            
+
             {renderTreeSection('所属政策委員会', 'policy_committee', committeesList, '政策委員会')}
             {renderTreeSection('所属地方支部', 'local_branches', branchesList, '地方支部')}
             {renderTreeSection('参加大プロジェクト', 'major_projects', majorProjectsList, '大プロジェクト')}

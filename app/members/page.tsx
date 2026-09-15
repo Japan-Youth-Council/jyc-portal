@@ -30,7 +30,12 @@ export default function MembersPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data: profilesData } = await supabase.from('profiles').select('*');
+      // 修正箇所: goal が null でないユーザーのみを取得する
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('*')
+        .not('goal', 'is', null);
+
       if (profilesData) {
         const withRandomKey = profilesData.map(p => ({ ...p, randomKey: Math.random() }));
         setMembers(withRandomKey);
