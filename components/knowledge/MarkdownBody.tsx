@@ -4,7 +4,8 @@ import { isValidElement, ReactNode } from 'react';
 import ReactMarkdown, { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { uniqueHeadingId } from '@/lib/knowledge';
+import { replaceWikiLinksToMarkdown, uniqueHeadingId } from '@/lib/knowledge';
+import { Knowledge } from '@/types/database';
 
 function getNodeText(node: ReactNode): string {
   if (node == null || typeof node === 'boolean') return '';
@@ -14,7 +15,15 @@ function getNodeText(node: ReactNode): string {
   return '';
 }
 
-export default function MarkdownBody({ content }: { content: string }) {
+export default function MarkdownBody({
+  content,
+  knowledges = [],
+  onWikiLink,
+}: {
+  content: string;
+  knowledges?: Knowledge[];
+  onWikiLink?: (knowledge: Knowledge) => void;
+}) {
   const used = new Map<string, number>();
   const heading = (Tag: 'h1' | 'h2' | 'h3') => {
     function Heading({ children }: { children?: ReactNode }) {
@@ -30,6 +39,25 @@ export default function MarkdownBody({ content }: { content: string }) {
     h2: heading('h2'),
     h3: heading('h3'),
     a: ({ href, children }) => {
+      if (href?.startsWith('wiki:')) {
+        const id = Number(href.slice(5));
+        const target = Number.isFinite(id) ? knowledges.find((item) => item.id === id) : null;
+        if (!target) {
+          return <span className="wiki-broken-link">{children}</span>;
+        }
+        if (!onWikiLink) {
+          return <span className="wiki-internal-link">{children}</span>;
+        }
+        return (
+          <button
+            type="button"
+            onClick={() => onWikiLink(target)}
+            className="wiki-internal-link"
+          >
+            {children}
+          </button>
+        );
+      }
       const external = href?.startsWith('http');
       return (
         <a
@@ -49,7 +77,7 @@ export default function MarkdownBody({ content }: { content: string }) {
   return (
     <div className="wiki-prose">
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
-        {content}
+        {replaceWikiLinksToMarkdown(content, knowledges)}
       </ReactMarkdown>
     </div>
   );

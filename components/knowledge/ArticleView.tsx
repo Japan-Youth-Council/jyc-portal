@@ -1,24 +1,30 @@
 'use client';
 
 import { FileText, Pencil, Trash2 } from 'lucide-react';
-import { extractHeadings, getCategoryPath } from '@/lib/knowledge';
+import { extractHeadings, getCategoryPath, linkedKnowledges } from '@/lib/knowledge';
 import { Knowledge, PolicyCategory } from '@/types/database';
 import MarkdownBody from './MarkdownBody';
 import TableOfContents from './TableOfContents';
+import WikiLinkList from './WikiLinkList';
 
 export default function ArticleView({
   knowledge,
+  knowledges,
   categories,
   onEdit,
   onDelete,
+  onSelectKnowledge,
 }: {
   knowledge: Knowledge;
+  knowledges: Knowledge[];
   categories: PolicyCategory[];
   onEdit: () => void;
   onDelete: () => void;
+  onSelectKnowledge: (knowledge: Knowledge) => void;
 }) {
   const { major, minor } = getCategoryPath(categories, knowledge.category_id);
   const toc = extractHeadings(knowledge.content);
+  const wikiLinks = linkedKnowledges(knowledge.content, knowledges, { excludeId: knowledge.id });
   const updated = new Date(knowledge.updated_at).toLocaleString('ja-JP', {
     year: 'numeric',
     month: 'short',
@@ -30,7 +36,7 @@ export default function ArticleView({
   return (
     <div className="flex-1 flex overflow-hidden min-h-0">
       <article className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-4 md:px-8 py-6">
+        <div className="max-w-3xl mx-auto px-4 md:px-8 py-6 pb-10">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div className="min-w-0">
               <p className="text-[11px] md:text-xs text-gray-400 font-medium mb-1 truncate">
@@ -87,8 +93,17 @@ export default function ArticleView({
           )}
 
           <div className="bg-white border border-gray-100 rounded-xl p-5 md:p-8 shadow-sm">
-            <MarkdownBody content={knowledge.content} />
+            <MarkdownBody
+              content={knowledge.content}
+              knowledges={knowledges}
+              onWikiLink={onSelectKnowledge}
+            />
           </div>
+          <WikiLinkList
+            items={wikiLinks}
+            categories={categories}
+            onSelect={onSelectKnowledge}
+          />
         </div>
       </article>
       <aside className="hidden xl:block w-56 shrink-0 border-l bg-white overflow-y-auto p-4">

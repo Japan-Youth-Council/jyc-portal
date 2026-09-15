@@ -145,3 +145,83 @@ export function insertAtLineStart(
   const next = value.slice(0, lineStart) + prefix + value.slice(lineStart);
   return { next, cursor: start + prefix.length };
 }
+
+export type WikiLinkRef = {
+  id: number | null;
+  title: string;
+};
+
+const WIKI_LINK_RE = /\[\[(\d+):([^\]]+)\]\]|\[\[([^\]]+)\]\]/g;
+
+function mapNonFenceLines(markdown: string, mapLine: (line: string) => string): string {
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+  let inFence = false;
+  return lines
+    .map((line) => {
+      if (/^```/.test(line.trim())) {
+        inFence = !inFence;
+        return line;
+      }
+      return inFence ? line : mapLine(line);
+    })
+    .join('\n');
+}
+
+export function formatWikiLink(knowledge: Knowledge): string {
+  const title = knowledge.title.replace(/[\[\]]/g, '').trim() || '無題のドキュメント';
+  return `[[${knowledge.id}:${title}]]`;
+}
+
+export function parseWikiLinks(markdown: string): WikiLinkRef[] {
+  const refs: WikiLinkRef[] = [];
+  const seen = new Set<string>();
+  mapNonFenceLines(markdown, (line) => {
+    const re = new RegExp(WIKI_LINK_RE.source, 'g');
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(line))) {
+      const id = match[1] ? Number(match[1]) : null;
+      const title = (match[2] ?? match[3] ?? '').trim();
+      if (!title && id == null) continue;
+      const key = id != null ? `id:${id}` : `title:${title.toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      refs.push({ id, title });
+    }
+    return line;
+  });
+  return refs;
+}
+
+export function resolveWikiLink(ref: WikiLinkRef, knowledges: Knowledge[]): Knowledge | null {
+  if (ref.id != null) {
+    return knowledges.find((item) => item.id === ref.id) ?? null;
+  }
+  const title = ref.title.toLowerCase();
+  return knowledges.find((item) => item.title.toLowerCase() === title) ?? null;
+}
+
+export function linkedKnowledges(
+  markdown: string,
+  knowledges: Knowledge[],
+  options?: { excludeId?: number | null }
+): { knowledge: Knowledge | null; title: string }[] {
+  return parseWikiLinks(markdown)
+    .map((ref) => {
+      const knowledge = resolveWikiLink(ref, knowledges);
+      return { knowledge, title: knowledge?.title ?? ref.title };
+    })
+    .filter((item) => item.knowledge?.id !== options?.excludeId);
+}
+
+export function replaceWikiLinksToMarkdown(markdown: string, knowledges: Knowledge[]): string {
+  return mapNonFenceLines(markdown, (line) =>
+    line.replace(new RegExp(WIKI_LINK_RE.source, 'g'), (_full, idStr, titled, titleOnly) => {
+      const id = idStr ? Number(idStr) : null;
+      const title = (titled ?? titleOnly ?? '').trim();
+      const found = resolveWikiLink({ id, title }, knowledges);
+      const label = (found?.title ?? title).replace(/\]/g, '');
+      if (found) return `[${label}](wiki:${found.id})`;
+      return `[${label}](wiki:missing)`;
+    })
+  );
+}

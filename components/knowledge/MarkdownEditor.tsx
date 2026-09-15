@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { Bold, Code, Heading2, Italic, Link as LinkIcon, List } from 'lucide-react';
-import { insertAtLineStart, insertAtSelection } from '@/lib/knowledge';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Bold, BookMarked, Code, Heading2, Italic, Link as LinkIcon, List, Search } from 'lucide-react';
+import { formatWikiLink, getCategoryPath, insertAtLineStart, insertAtSelection } from '@/lib/knowledge';
+import { Knowledge, PolicyCategory } from '@/types/database';
 import MarkdownBody from './MarkdownBody';
 
 type Tool = {
@@ -60,13 +61,23 @@ const TOOLS: Tool[] = [
 export default function MarkdownEditor({
   value,
   onChange,
+  knowledges,
+  categories,
+  currentId,
 }: {
   value: string;
   onChange: (next: string) => void;
+  knowledges: Knowledge[];
+  categories: PolicyCategory[];
+  currentId: number | null;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
   const pendingSelection = useRef<{ start: number; end: number } | null>(null);
+  const insertRange = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
   const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQuery, setPickerQuery] = useState('');
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -76,6 +87,33 @@ export default function MarkdownEditor({
     el.setSelectionRange(pending.start, pending.end);
     pendingSelection.current = null;
   }, [value]);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [pickerOpen]);
+
+  const candidates = useMemo(() => {
+    const query = pickerQuery.trim().toLowerCase();
+    return knowledges
+      .filter((item) => item.id !== currentId)
+      .filter((item) => {
+        if (!query) return true;
+        const path = getCategoryPath(categories, item.category_id);
+        return [item.title, path.major?.name, path.minor?.name]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+          .includes(query);
+      })
+      .slice(0, 40);
+  }, [knowledges, categories, currentId, pickerQuery]);
 
   const applyTool = (tool: Tool) => {
     const el = textareaRef.current;
@@ -88,10 +126,29 @@ export default function MarkdownEditor({
     onChange(result.next);
   };
 
+  const openPicker = () => {
+    const el = textareaRef.current;
+    insertRange.current = {
+      start: el?.selectionStart ?? value.length,
+      end: el?.selectionEnd ?? value.length,
+    };
+    setPickerQuery('');
+    setPickerOpen(true);
+  };
+
+  const insertWikiLink = (knowledge: Knowledge) => {
+    const token = formatWikiLink(knowledge);
+    const { start, end } = insertRange.current;
+    const next = value.slice(0, start) + token + value.slice(end);
+    pendingSelection.current = { start: start + token.length, end: start + token.length };
+    onChange(next);
+    setPickerOpen(false);
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex items-center justify-between gap-2 border-b bg-white px-2 py-1.5">
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1 items-center">
           {TOOLS.map((tool) => {
             const Icon = tool.icon;
             return (
@@ -107,6 +164,59 @@ export default function MarkdownEditor({
               </button>
             );
           })}
+          <div className="relative" ref={pickerRef}>
+            <button
+              type="button"
+              title="Wikiリンク挿入"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={openPicker}
+              className="inline-flex items-center gap-1 px-1.5 py-1.5 rounded hover:bg-purple-50 text-purple-700"
+            >
+              <BookMarked className="w-4 h-4" />
+              <span className="hidden sm:inline text-[11px] font-bold">Wikiリンク</span>
+            </button>
+            {pickerOpen && (
+              <div className="absolute left-0 top-full mt-1 z-30 w-72 sm:w-80 bg-white border border-gray-200 rounded-xl shadow-lg p-2">
+                <div className="relative mb-2">
+                  <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-400" />
+                  <input
+                    autoFocus
+                    type="text"
+                    value={pickerQuery}
+                    onChange={(e) => setPickerQuery(e.target.value)}
+                    placeholder="ドキュメントを検索"
+                    className="w-full pl-8 pr-3 py-2 border rounded-md text-sm outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div className="max-h-64 overflow-y-auto">
+                  {candidates.length === 0 ? (
+                    <p className="text-xs text-gray-400 px-2 py-4 text-center">該当するドキュメントがありません。</p>
+                  ) : (
+                    <ul>
+                      {candidates.map((item) => {
+                        const path = getCategoryPath(categories, item.category_id);
+                        return (
+                          <li key={item.id}>
+                            <button
+                              type="button"
+                              onClick={() => insertWikiLink(item)}
+                              className="w-full text-left px-2 py-1.5 rounded-md hover:bg-purple-50"
+                            >
+                              <span className="block text-sm font-bold text-gray-800 truncate">{item.title}</span>
+                              <span className="block text-[11px] text-gray-400 truncate">
+                                {path.major?.name || '未分類'}
+                                {path.minor ? ` › ${path.minor.name}` : ''}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         <div className="lg:hidden flex text-xs font-bold bg-gray-100 rounded-md p-0.5">
           <button
@@ -140,7 +250,7 @@ export default function MarkdownEditor({
             mobileTab === 'edit' ? 'hidden lg:block' : 'block'
           }`}
         >
-          <MarkdownBody content={value} />
+          <MarkdownBody content={value} knowledges={knowledges} />
         </div>
       </div>
     </div>

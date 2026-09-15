@@ -89,10 +89,25 @@ body {
   border-radius: 0 0.5rem 0.5rem 0;
 }
 
-.wiki-prose a {
+.wiki-prose a,
+.wiki-prose .wiki-internal-link {
   color: #2563eb;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.wiki-prose .wiki-internal-link {
+  font: inherit;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.wiki-prose .wiki-broken-link {
+  color: #9ca3af;
+  text-decoration: underline;
+  text-decoration-style: dashed;
 }
 
 .wiki-prose code {

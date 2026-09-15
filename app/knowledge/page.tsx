@@ -7,6 +7,7 @@ import {
   collectTags,
   filterKnowledges,
   getCategoryPath,
+  linkedKnowledges,
   parseTagsInput,
   tagsToInput,
 } from '@/lib/knowledge';
@@ -16,6 +17,7 @@ import KnowledgeSidebar from '@/components/knowledge/KnowledgeSidebar';
 import ArticleView from '@/components/knowledge/ArticleView';
 import MarkdownEditor from '@/components/knowledge/MarkdownEditor';
 import KnowledgeMetaForm from '@/components/knowledge/KnowledgeMetaForm';
+import WikiLinkList from '@/components/knowledge/WikiLinkList';
 
 type Draft = {
   title: string;
@@ -316,6 +318,14 @@ export default function KnowledgePage() {
           <MarkdownEditor
             value={draft.content}
             onChange={(content) => setDraft((current) => (current ? { ...current, content } : current))}
+            knowledges={knowledges}
+            categories={categories}
+            currentId={selected.id}
+          />
+          <WikiLinkList
+            items={linkedKnowledges(draft.content, knowledges, { excludeId: selected.id })}
+            categories={categories}
+            compact
           />
         </>
       ) : displayed ? (
@@ -332,9 +342,11 @@ export default function KnowledgePage() {
           </div>
           <ArticleView
             knowledge={displayed}
+            knowledges={knowledges}
             categories={categories}
             onEdit={startEdit}
             onDelete={handleDelete}
+            onSelectKnowledge={selectKnowledge}
           />
         </>
       ) : showingList ? (
