@@ -3,8 +3,12 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { User, Upload, X, Save, Mail } from 'lucide-react'; 
+import { User, Upload, X, Save, Mail, Share } from 'lucide-react'; // ★ Shareを追加
 import imageCompression from 'browser-image-compression';
+import { toPng } from 'html-to-image'; // ★ 追加
+
+// ▼ 切り出したコンポーネントをインポート
+import ProfileExportCard from '@/components/ProfileExportCard';
 
 const PREFECTURES = [
   "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県", "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
@@ -19,6 +23,7 @@ export default function ProfileEditPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState({ text: '', isError: false });
+  const [isDownloading, setIsDownloading] = useState(false); // ★ ダウンロード状態の管理
 
   const [showCompleted, setShowCompleted] = useState(false);
 
@@ -47,22 +52,15 @@ export default function ProfileEditPage() {
       
       let currentUser = session.user;
 
-      // ==========================================
-      // ▼ 古いGoogleアカウントの自動解除（すり替え）ロジック ▼
-      // ==========================================
+      // 古いGoogleアカウントの自動解除ロジック
       const oldIdentityId = localStorage.getItem('pending_unlink_identity_id');
       if (oldIdentityId && currentUser.identities) {
-        // 現在リンクされているGoogleアカウントをすべて取得
         const googleIdentities = currentUser.identities.filter(id => id.provider === 'google');
-        
-        // Googleアカウントが2つ以上ある（＝新しいアカウントが無事に追加された）場合のみ実行
         if (googleIdentities.length > 1) {
           const identityToUnlink = currentUser.identities.find(id => id.identity_id === oldIdentityId);
           if (identityToUnlink) {
-            // 古いアカウントの連携を解除
             const { error: unlinkError } = await supabase.auth.unlinkIdentity(identityToUnlink);
             if (!unlinkError) {
-              // 解除成功したらフラグを消し、セッションを最新化する
               localStorage.removeItem('pending_unlink_identity_id');
               const { data: refreshedData } = await supabase.auth.refreshSession();
               if (refreshedData.session) {
@@ -74,11 +72,9 @@ export default function ProfileEditPage() {
             }
           }
         } else {
-          // 認証をキャンセルした、あるいは全く同じアカウントを選んだ場合は、フラグだけ消して何もしない
           localStorage.removeItem('pending_unlink_identity_id');
         }
       }
-      // ==========================================
 
       setUser(currentUser);
 
@@ -144,34 +140,24 @@ export default function ProfileEditPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // ▼ 確認メールなしで直接Googleアカウントを【変更】する処理
   const handleChangeGoogleAccount = async () => {
     try {
       if (!user?.identities) return;
-      
-      // 現在のGoogleアカウントのIDを探す
       const currentGoogleIdentity = user.identities.find((id: any) => id.provider === 'google');
-      
       if (currentGoogleIdentity) {
-        // リダイレクト前に、消すべき古いIDをブラウザに記憶させておく
         localStorage.setItem('pending_unlink_identity_id', currentGoogleIdentity.identity_id);
       }
-
-      // 新しいアカウントを連携しにGoogleへ飛ぶ
       const { error } = await supabase.auth.linkIdentity({
         provider: 'google',
         options: {
-          redirectTo: window.location.href, // 認証後にこのページに戻ってくる
-          queryParams: {
-            prompt: 'select_account' // 既にログイン済みでも強制的にアカウント選択画面を出す
-          }
+          redirectTo: window.location.href,
+          queryParams: { prompt: 'select_account' }
         }
       });
       if (error) throw error;
-      
     } catch (err: any) {
       alert('Googleアカウントの連携画面への移行に失敗しました: ' + err.message);
-      localStorage.removeItem('pending_unlink_identity_id'); // 失敗時はフラグを消す
+      localStorage.removeItem('pending_unlink_identity_id');
     }
   };
 
@@ -192,7 +178,6 @@ export default function ProfileEditPage() {
         finalPhotoUrl = data.url;
       }
 
-      // ドメインベースでのコアメンバー判定（現在のメインアドレスで判定）
       const isCore = user.email?.endsWith('@japanyouthcouncil.com') || false;
 
       const { error: dbError } = await supabase.from('profiles').update({
@@ -218,6 +203,77 @@ export default function ProfileEditPage() {
       setIsSaving(false);
     }
   };
+
+  // ==========================================
+  // ▼ エクスポート用の処理とデータ構築 ▼
+  // ==========================================
+  const handleDownloadProfile = async () => {
+    const element = document.getElementById('profile-card-export');
+    if (!element) return;
+    setIsDownloading(true);
+    
+    try {
+      const dataUrl = await toPng(element, { 
+        pixelRatio: 2, 
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+      });
+
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const fileName = formData.name ? `${formData.name}_JYCProfile.png` : 'JYCProfile.png';
+      const file = new File([blob], fileName, { type: 'image/png' });
+
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+      if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'JYC プロフィールカード',
+        });
+      } else {
+        const link = document.createElement('a');
+        link.download = file.name;
+        link.href = dataUrl;
+        link.click();
+      }
+    } catch (err) {
+      console.error('画像保存エラー:', err);
+      alert('画像の保存・共有に失敗しました。');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  // 入力中のデータをエクスポート用コンポーネントの形式に合わせる
+  const exportMemberData = {
+    ...formData,
+    is_core_member: user?.email?.endsWith('@japanyouthcouncil.com') || false,
+    photo_url: imagePreviewUrl || formData.photo_url // プレビュー中の画像があればそれを優先
+  };
+
+  const getExportTags = () => {
+    const getTags = (csv: string, list: any[], type?: string) => {
+      if (!csv) return [];
+      return csv.split(',').map(name => {
+        const item = list.find(m => m.name === name);
+        return { name, status: item ? item.status : '進行中', type };
+      });
+    };
+
+    const bigProjects = [
+      ...getTags(formData.policy_committee, committeesList, 'committee'),
+      ...getTags(formData.local_branches, branchesList, 'branch'),
+      ...getTags(formData.major_projects, majorProjectsList, 'major')
+    ];
+    const smallProjects = getTags(formData.projects, projectsList);
+
+    return { bigProjects, smallProjects };
+  };
+
+  const { bigProjects, smallProjects } = getExportTags();
+  // ==========================================
+
 
   const renderTreeSection = (title: string, parentField: keyof typeof formData, parents: any[], parentTypeStr: string) => {
     const visibleParents = parents.filter(parent => {
@@ -275,11 +331,23 @@ export default function ProfileEditPage() {
   if (isLoading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold text-gray-500">読み込み中...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8 overflow-x-hidden">
       <div className="max-w-2xl mx-auto bg-white p-6 sm:p-10 rounded-2xl shadow-sm border border-gray-200">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-          <User className="w-6 h-6 text-blue-600"/> プロフィール設定
-        </h2>
+        
+        {/* ▼ ヘッダーにダウンロードボタンを追加 ▼ */}
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <User className="w-6 h-6 text-blue-600"/> プロフィール設定
+          </h2>
+          <button 
+            type="button" 
+            onClick={handleDownloadProfile}
+            disabled={isDownloading}
+            className="flex items-center justify-center gap-2 bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition px-4 py-2 rounded-lg text-sm font-bold shadow-sm disabled:opacity-50 w-full sm:w-auto"
+          >
+            <Share className="w-4 h-4" /> {isDownloading ? '生成中...' : 'カードを出力・シェア'}
+          </button>
+        </div>
         
         {message.text && (
           <div className={`p-4 rounded-lg mb-6 font-bold text-sm ${message.isError ? 'bg-red-50 text-red-800 border-l-4 border-red-500' : 'bg-green-50 text-green-800 border-l-4 border-green-500'}`}>
@@ -289,14 +357,13 @@ export default function ProfileEditPage() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           
-          {/* ▼ Googleアカウント変更セクション ▼ */}
+          {/* Googleアカウント変更セクション */}
           <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 mb-8">
             <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2"><Mail className="w-4 h-4"/> ログイン用Googleアカウント</h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-800 mb-1">現在のアドレス</label>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-gray-300 p-3 rounded-lg">
-                  {/* user.email はトップレベルで更新されない場合があるため、identities から最新のものを取得して表示 */}
                   <span className="text-sm text-gray-900 font-bold">
                     {user?.identities?.find((id: any) => id.provider === 'google')?.identity_data?.email || user?.email}
                   </span>
@@ -340,7 +407,7 @@ export default function ProfileEditPage() {
             <div>
               <label className="block text-xs font-bold text-gray-800 mb-1">属性</label>
               <select name="attribute" value={formData.attribute} onChange={handleChange} className="w-full border border-gray-300 p-2.5 rounded-lg text-sm text-gray-900 font-medium bg-white">
-                <option value="高校生">高校生</option><option value="大学生">大学生</option><option value="大学院生">大学院生</option><option value="社会人">社会人</option><option value="その他">その他</option>
+                <option value="高校生">高校生</option><option value="大学生">大学生</option><option value="大学院生">大学院生</option><option value="社会人">社会人</option><option value="中学生">中学生</option><option value="その他">その他</option>
               </select>
             </div>
             <div>
@@ -384,6 +451,16 @@ export default function ProfileEditPage() {
           </div>
         </form>
       </div>
+
+      {/* ▼ エクスポート用の隠しレイヤー ▼ */}
+      <div className="absolute -left-[9999px] -top-[9999px]">
+        <ProfileExportCard 
+          member={exportMemberData} 
+          bigProjects={bigProjects} 
+          smallProjects={smallProjects} 
+        />
+      </div>
+
     </div>
   );
 }

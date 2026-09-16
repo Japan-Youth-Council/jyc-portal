@@ -2,35 +2,50 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Search, Star, Clock, Shuffle, X, User, Filter } from 'lucide-react';
+import { Search, Star, Clock, Shuffle, X, User, Filter, Share, Link as LinkIcon } from 'lucide-react';
+import { toPng } from 'html-to-image';
+
+// ▼ 作成したコンポーネントをインポート
+import ProfileExportCard from '@/components/ProfileExportCard';
+
+// 画面表示用のフォントサイズ自動調整関数
+const getDynamicTextClass = (text: string | null | undefined, type: 'goal' | 'free') => {
+  const len = text?.length || 0;
+  if (type === 'goal') {
+    if (len < 60) return 'text-lg leading-relaxed';
+    if (len < 120) return 'text-base leading-relaxed';
+    if (len < 180) return 'text-sm leading-normal';
+    return 'text-xs leading-snug';
+  } else {
+    if (len < 50) return 'text-[11px] leading-relaxed';
+    if (len < 100) return 'text-[10px] leading-normal';
+    return 'text-[9px] leading-snug';
+  }
+};
 
 export default function MembersPage() {
   const [members, setMembers] = useState<any[]>([]);
   const [filteredMembers, setFilteredMembers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // フィルター用の選択肢リスト 兼 終了済み判定用のステータス保持リスト
   const [committeesList, setCommitteesList] = useState<{name: string, status: string}[]>([]);
   const [branchesList, setBranchesList] = useState<{name: string, status: string}[]>([]);
   const [majorProjectsList, setMajorProjectsList] = useState<{name: string, status: string}[]>([]);
   const [projectsList, setProjectsList] = useState<{name: string, status: string}[]>([]);
 
-  // 検索・絞り込みステート
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCommittee, setSelectedCommittee] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('');
   const [selectedMajorProject, setSelectedMajorProject] = useState('');
   const [isCoreOnly, setIsCoreOnly] = useState(false);
-  
-  // ▼ 終了済みプロジェクトを表示するかどうかのトグル
   const [showCompleted, setShowCompleted] = useState(false);
   
   const [sortMode, setSortMode] = useState<'random' | 'recent'>('random');
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
-      // 修正箇所: goal が null でないユーザーのみを取得する
       const { data: profilesData } = await supabase
         .from('profiles')
         .select('*')
@@ -41,7 +56,6 @@ export default function MembersPage() {
         setMembers(withRandomKey);
       }
 
-      // ステータスも含めて取得する
       const { data: cData } = await supabase.from('policy_committees').select('name, status').order('created_at');
       const { data: bData } = await supabase.from('local_branches').select('name, status').order('created_at');
       const { data: mData } = await supabase.from('major_projects').select('name, status').order('created_at');
@@ -89,101 +103,148 @@ export default function MembersPage() {
     setSortMode('random');
   };
 
-  // ▼ 指定されたカンマ区切りの文字列から、表示すべきタグ（終了済みを考慮）の配列を返す関数
-  const getVisibleTags = (csvString: string, masterList: {name: string, status: string}[]) => {
+  const getVisibleTagsInfo = (csvString: string, masterList: {name: string, status: string}[]) => {
     if (!csvString) return [];
-    return csvString.split(',').filter(itemName => {
-      if (showCompleted) return true;
-      // マスターデータから該当アイテムのステータスを確認
+    return csvString.split(',').map(itemName => {
       const itemData = masterList.find(m => m.name === itemName);
-      return itemData ? itemData.status !== '終了済み' : true;
-    });
+      return { name: itemName, status: itemData ? itemData.status : '進行中' };
+    }).filter(item => showCompleted || item.status !== '終了済み');
   };
 
-  if (isLoading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold text-gray-500">読み込み中...</div>;
+  const handleDownloadProfile = async () => {
+    const element = document.getElementById('profile-card-export');
+    if (!element) return;
+    setIsDownloading(true);
+    
+    try {
+      const dataUrl = await toPng(element, { 
+        pixelRatio: 2, 
+        backgroundColor: '#ffffff'
+      });
+
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const file = new File([blob], `${selectedMember.name}_JYCProfile.png`, { type: 'image/png' });
+
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+      if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'JYC プロフィールカード',
+        });
+      } else {
+        const link = document.createElement('a');
+        link.download = file.name;
+        link.href = dataUrl;
+        link.click();
+      }
+    } catch (err) {
+      console.error('画像保存エラー:', err);
+      alert('画像の保存・共有に失敗しました。');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const getExportTags = () => {
+    if (!selectedMember) return { bigProjects: [], smallProjects: [] };
+    const committees = getVisibleTagsInfo(selectedMember.policy_committee, committeesList);
+    const major = getVisibleTagsInfo(selectedMember.major_projects, majorProjectsList);
+    const branches = getVisibleTagsInfo(selectedMember.local_branches, branchesList);
+    
+    const bigProjects = [
+      ...committees.map(c => ({...c, type: 'committee'})),
+      ...branches.map(b => ({...b, type: 'branch'})),
+      ...major.map(m => ({...m, type: 'major'}))
+    ];
+    const smallProjects = getVisibleTagsInfo(selectedMember.projects, projectsList);
+    return { bigProjects, smallProjects };
+  };
+
+  const { bigProjects, smallProjects } = getExportTags();
+  
+  if (isLoading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center font-bold text-gray-900">読み込み中...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8 overflow-x-hidden">
       <div className="max-w-7xl mx-auto">
         
         <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold text-blue-900 flex items-center gap-2">メンバー自己紹介</h2>
-            <p className="text-sm text-gray-500 mt-1 font-medium">現在 {filteredMembers.length} 名のメンバーが表示されています</p>
+            <p className="text-sm text-gray-600 mt-1 font-bold">現在 {filteredMembers.length} 名のメンバーが表示されています</p>
           </div>
 
           <div className="flex bg-white p-1 rounded-lg border border-gray-200 shadow-sm shrink-0 w-fit">
-            <button onClick={() => setSortMode('recent')} className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-md transition ${sortMode === 'recent' ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}>
+            <button onClick={() => setSortMode('recent')} className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-md transition ${sortMode === 'recent' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>
               <Clock className="w-3.5 h-3.5"/> 最近登録した人
             </button>
-            <button onClick={handleReshuffle} className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-md transition ${sortMode === 'random' ? 'bg-blue-50 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}>
+            <button onClick={handleReshuffle} className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-md transition ${sortMode === 'random' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>
               <Shuffle className="w-3.5 h-3.5"/> ランダムに表示
             </button>
           </div>
         </div>
 
-        {/* コントロールパネル（検索・絞り込み） */}
         <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 mb-8 space-y-4">
           <div className="flex flex-col lg:flex-row gap-4 lg:items-center">
             <div className="flex-1 relative">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input 
                 type="text" placeholder="名前やふりがなで検索..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500 transition"
+                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm text-black outline-none focus:ring-2 focus:ring-blue-500 transition font-bold"
               />
             </div>
             
             <div className="flex items-center gap-3 shrink-0 flex-wrap">
-              <label className="flex items-center justify-center gap-2 px-5 py-2.5 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg cursor-pointer hover:bg-yellow-100 transition select-none">
-                <input type="checkbox" checked={isCoreOnly} onChange={(e) => setIsCoreOnly(e.target.checked)} className="w-4 h-4 text-yellow-600 rounded border-yellow-300 focus:ring-yellow-500" />
+              <label className="flex items-center justify-center gap-2 px-5 py-2.5 bg-yellow-50 border border-yellow-300 text-yellow-900 rounded-lg cursor-pointer hover:bg-yellow-100 transition select-none">
+                <input type="checkbox" checked={isCoreOnly} onChange={(e) => setIsCoreOnly(e.target.checked)} className="w-4 h-4 text-yellow-600 rounded border-yellow-400 focus:ring-yellow-500" />
                 <span className="text-sm font-bold flex items-center gap-1"><Star className="w-4 h-4 fill-current"/> コアのみ</span>
               </label>
 
-              {/* ▼ 終了済み表示切替トグル */}
-              <label className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gray-50 border border-gray-200 text-gray-700 rounded-lg cursor-pointer hover:bg-gray-100 transition select-none">
-                <input type="checkbox" checked={showCompleted} onChange={(e) => setShowCompleted(e.target.checked)} className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500" />
+              <label className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gray-50 border border-gray-300 text-black rounded-lg cursor-pointer hover:bg-gray-100 transition select-none">
+                <input type="checkbox" checked={showCompleted} onChange={(e) => setShowCompleted(e.target.checked)} className="w-4 h-4 text-blue-600 rounded border-gray-400 focus:ring-blue-500" />
                 <span className="text-sm font-bold flex items-center gap-1">終了済みも表示</span>
               </label>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <select value={selectedCommittee} onChange={(e) => setSelectedCommittee(e.target.value)} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-900 font-medium outline-none focus:ring-2 focus:ring-blue-500">
+            <select value={selectedCommittee} onChange={(e) => setSelectedCommittee(e.target.value)} className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-black font-bold outline-none focus:ring-2 focus:ring-blue-500">
               <option value="">すべての政策委員会</option>
               {committeesList.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
             </select>
-            <select value={selectedBranch} onChange={(e) => setSelectedBranch(e.target.value)} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-900 font-medium outline-none focus:ring-2 focus:ring-blue-500">
+            <select value={selectedBranch} onChange={(e) => setSelectedBranch(e.target.value)} className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-black font-bold outline-none focus:ring-2 focus:ring-blue-500">
               <option value="">すべての地方支部</option>
               {branchesList.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
             </select>
-            <select value={selectedMajorProject} onChange={(e) => setSelectedMajorProject(e.target.value)} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-900 font-medium outline-none focus:ring-2 focus:ring-blue-500">
+            <select value={selectedMajorProject} onChange={(e) => setSelectedMajorProject(e.target.value)} className="bg-gray-50 border border-gray-300 rounded-lg px-3 py-2.5 text-sm text-black font-bold outline-none focus:ring-2 focus:ring-blue-500">
               <option value="">すべての大プロジェクト</option>
               {majorProjectsList.map(m => <option key={m.name} value={m.name}>{m.name}</option>)}
             </select>
           </div>
         </div>
 
-        {/* ギャラリービュー */}
         {filteredMembers.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
             {filteredMembers.map(member => (
-              <div key={member.id} onClick={() => setSelectedMember(member)} className="group relative cursor-pointer rounded-xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 aspect-[4/5] bg-gray-100 border border-gray-200">
+              <div key={member.id} onClick={() => setSelectedMember(member)} className="group relative cursor-pointer rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 aspect-[4/5] bg-gray-100 border border-gray-200">
                 {member.photo_url ? (
                   <img src={member.photo_url} alt={member.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 ) : (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 text-gray-400 group-hover:bg-gray-200 transition-colors">
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 text-gray-500 group-hover:bg-gray-200 transition-colors">
                     <User className="w-12 h-12 mb-2 opacity-50" />
                   </div>
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-90" />
-                <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 text-white flex justify-between items-end">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-100" />
+                <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 text-white flex justify-between items-end drop-shadow-md">
                   <div className="truncate">
-                    <p className="text-[10px] text-gray-300 font-medium mb-0.5">{member.attribute} / {member.prefecture}</p>
+                    <p className="text-[10px] text-gray-200 font-bold mb-0.5">{member.attribute} / {member.prefecture}</p>
                     <h3 className="font-bold text-sm sm:text-base leading-tight truncate">{member.name || '名称未設定'}</h3>
                   </div>
                   {member.is_core_member && (
-                    <div className="shrink-0 ml-2 bg-yellow-400/20 p-1 rounded-full backdrop-blur-sm" title="コアメンバー">
-                      <Star className="w-3.5 h-3.5 text-yellow-400 fill-current" />
+                    <div className="shrink-0 ml-2 bg-yellow-400/90 p-1 rounded-full backdrop-blur-sm" title="コアメンバー">
+                      <Star className="w-3.5 h-3.5 text-yellow-900 fill-current" />
                     </div>
                   )}
                 </div>
@@ -192,8 +253,8 @@ export default function MembersPage() {
           </div>
         ) : (
           <div className="text-center py-20 bg-white rounded-xl border border-gray-200 shadow-sm">
-            <Filter className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 font-bold">条件に一致するメンバーが見つかりません</p>
+            <Filter className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+            <p className="text-black font-bold">条件に一致するメンバーが見つかりません</p>
           </div>
         )}
 
@@ -205,7 +266,16 @@ export default function MembersPage() {
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedMember(null)} />
           
           <div className="relative bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
-            <button onClick={() => setSelectedMember(null)} className="absolute top-4 right-4 z-10 bg-black/20 hover:bg-black/40 text-white p-2 rounded-full transition backdrop-blur-md">
+            
+            <button 
+              onClick={handleDownloadProfile} 
+              disabled={isDownloading}
+              className="absolute top-4 right-14 z-20 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full transition shadow-lg flex items-center gap-1 disabled:opacity-50"
+              title="画像をシェア・保存"
+            >
+              <Share className="w-5 h-5" />
+            </button>
+            <button onClick={() => setSelectedMember(null)} className="absolute top-4 right-4 z-20 bg-black/40 hover:bg-black/60 text-white p-2 rounded-full transition backdrop-blur-md">
               <X className="w-5 h-5" />
             </button>
 
@@ -213,86 +283,80 @@ export default function MembersPage() {
               {selectedMember.photo_url ? (
                 <img src={selectedMember.photo_url} alt="Profile" className="absolute inset-0 w-full h-full object-cover" />
               ) : (
-                <User className="w-20 h-20 text-gray-300" />
+                <User className="w-20 h-20 text-gray-400" />
               )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent opacity-90" />
+              
+              <div className="absolute bottom-0 left-0 right-0 p-6 text-white drop-shadow-lg">
                 <div className="flex items-center gap-3 mb-1">
-                  {selectedMember.is_core_member && <span className="bg-yellow-400 text-yellow-900 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1"><Star className="w-3 h-3 fill-current"/> コアメンバー</span>}
-                  <span className="bg-white/20 backdrop-blur-md text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/30">{selectedMember.attribute}</span>
-                  <span className="bg-white/20 backdrop-blur-md text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/30">{selectedMember.prefecture}{selectedMember.city && ` ${selectedMember.city}`}</span>
+                  {selectedMember.is_core_member && <span className="bg-yellow-400 text-yellow-900 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 border border-yellow-500"><Star className="w-3 h-3 fill-current"/> コア</span>}
+                  <span className="bg-black/40 backdrop-blur-md text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/40">{selectedMember.attribute}</span>
+                  <span className="bg-black/40 backdrop-blur-md text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/40">{selectedMember.prefecture}{selectedMember.city && ` ${selectedMember.city}`}</span>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-bold">{selectedMember.name}</h2>
-                <p className="text-xs text-gray-300 mt-1">{selectedMember.furigana}</p>
+                <p className="text-xs text-gray-200 mt-1 font-bold">{selectedMember.furigana}</p>
               </div>
             </div>
 
             <div className="p-6 overflow-y-auto space-y-6">
               <div>
-                <h4 className="text-xs font-bold text-gray-400 mb-2 border-b pb-1">若者協議会で実現したいこと</h4>
-                <p className="text-gray-900 text-sm whitespace-pre-wrap leading-relaxed font-medium">{selectedMember.goal || '（未入力）'}</p>
+                <h4 className="text-xs font-bold text-gray-500 mb-2 border-b pb-1">若者協議会で実現したいこと</h4>
+                <p className="text-black text-sm whitespace-pre-wrap leading-relaxed font-bold">{selectedMember.goal || '（未入力）'}</p>
               </div>
 
-              {/* ▼ フィルタリングされたタグを表示 */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
-                  <h4 className="text-[11px] font-bold text-gray-400 mb-2">所属政策委員会</h4>
-                  {getVisibleTags(selectedMember.policy_committee, committeesList).length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {getVisibleTags(selectedMember.policy_committee, committeesList).map((c: string) => <span key={c} className="bg-blue-50 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-md border border-blue-200">{c}</span>)}
-                    </div>
-                  ) : <p className="text-gray-400 text-xs font-medium">未設定（または終了済み）</p>}
+                  <h4 className="text-[11px] font-bold text-gray-500 mb-2">所属・大プロジェクト</h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {bigProjects.length > 0 ? bigProjects.map((t) => (
+                      <span key={t.name} className={`text-xs font-bold px-2.5 py-1 rounded-md border ${t.status === '終了済み' ? 'bg-gray-100 text-gray-600 border-gray-300' : (t.type === 'committee' || t.type === 'branch' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-orange-50 text-orange-700 border-orange-200')}`}>{t.name}</span>
+                    )) : <p className="text-gray-500 text-xs font-bold">未設定</p>}
+                  </div>
                 </div>
                 <div>
-                  <h4 className="text-[11px] font-bold text-gray-400 mb-2">所属地方支部</h4>
-                  {getVisibleTags(selectedMember.local_branches, branchesList).length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {getVisibleTags(selectedMember.local_branches, branchesList).map((b: string) => <span key={b} className="bg-purple-50 text-purple-700 text-xs font-bold px-2.5 py-1 rounded-md border border-purple-200">{b}</span>)}
-                    </div>
-                  ) : <p className="text-gray-400 text-xs font-medium">未設定（または終了済み）</p>}
-                </div>
-                <div>
-                  <h4 className="text-[11px] font-bold text-gray-400 mb-2">参加大プロジェクト</h4>
-                  {getVisibleTags(selectedMember.major_projects, majorProjectsList).length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {getVisibleTags(selectedMember.major_projects, majorProjectsList).map((m: string) => <span key={m} className="bg-orange-50 text-orange-700 text-xs font-bold px-2.5 py-1 rounded-md border border-orange-200">{m}</span>)}
-                    </div>
-                  ) : <p className="text-gray-400 text-xs font-medium">未設定（または終了済み）</p>}
-                </div>
-                <div>
-                  <h4 className="text-[11px] font-bold text-gray-400 mb-2">個別小プロジェクト</h4>
-                  {getVisibleTags(selectedMember.projects, projectsList).length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {getVisibleTags(selectedMember.projects, projectsList).map((p: string) => <span key={p} className="bg-green-50 text-green-700 text-xs font-bold px-2.5 py-1 rounded-md border border-green-200">{p}</span>)}
-                    </div>
-                  ) : <p className="text-gray-400 text-xs font-medium">未設定（または終了済み）</p>}
+                  <h4 className="text-[11px] font-bold text-gray-500 mb-2">個別小プロジェクト</h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {smallProjects.length > 0 ? smallProjects.map((t) => (
+                      <span key={t.name} className={`text-xs font-bold px-2.5 py-1 rounded-md border ${t.status === '終了済み' ? 'bg-gray-100 text-gray-600 border-gray-300' : 'bg-green-50 text-green-700 border-green-200'}`}>{t.name}</span>
+                    )) : <p className="text-gray-500 text-xs font-bold">未設定</p>}
+                  </div>
                 </div>
               </div>
 
               {(selectedMember.outside_activities || selectedMember.sns_links) && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 border-t border-gray-100">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 border-t border-gray-200">
                   {selectedMember.outside_activities && (
                     <div>
-                      <h4 className="text-[11px] font-bold text-gray-400 mb-1">協議会以外での活動・所属</h4>
-                      <p className="text-gray-900 text-sm font-medium">{selectedMember.outside_activities}</p>
+                      <h4 className="text-[11px] font-bold text-gray-500 mb-1">協議会以外での活動・所属</h4>
+                      <p className="text-black text-sm font-bold">{selectedMember.outside_activities}</p>
                     </div>
                   )}
                   {selectedMember.sns_links && (
                     <div>
-                      <h4 className="text-[11px] font-bold text-gray-400 mb-1">個人SNS・リンク</h4>
-                      <p className="text-blue-600 text-sm break-all font-medium"><a href={selectedMember.sns_links} target="_blank" rel="noreferrer" className="hover:underline">{selectedMember.sns_links}</a></p>
+                      <h4 className="text-[11px] font-bold text-gray-500 mb-1">個人SNS・リンク</h4>
+                      <p className="text-blue-600 text-sm break-all font-bold"><a href={selectedMember.sns_links} target="_blank" rel="noreferrer" className="hover:underline">{selectedMember.sns_links}</a></p>
                     </div>
                   )}
                 </div>
               )}
 
               {selectedMember.free_text && (
-                <div className="pt-2 border-t border-gray-100">
-                  <h4 className="text-[11px] font-bold text-gray-400 mb-2">自由記述（趣味・特技など）</h4>
-                  <p className="text-gray-900 text-sm whitespace-pre-wrap leading-relaxed font-medium">{selectedMember.free_text}</p>
+                <div className="pt-2 border-t border-gray-200">
+                  <h4 className="text-[11px] font-bold text-gray-500 mb-2">自由記述（趣味・特技など）</h4>
+                  <p className="text-black text-sm whitespace-pre-wrap leading-relaxed font-bold">{selectedMember.free_text}</p>
                 </div>
               )}
             </div>
+            
+            {/* ▼ 切り出したコンポーネントを配置 */}
+            <div className="absolute -left-[9999px] -top-[9999px]">
+              <ProfileExportCard 
+                member={selectedMember} 
+                bigProjects={bigProjects} 
+                smallProjects={smallProjects} 
+              />
+            </div>
+
           </div>
         </div>
       )}

@@ -110,7 +110,7 @@ export default function Header() {
 
         {/* パソコン用のナビゲーション（スマホでは非表示） */}
         <nav className="hidden md:flex space-x-6">
-          <Link href="/" className={`font-medium ${isActive('/') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600 border-b-2 border-transparent pb-1'}`}>Home</Link>
+          <Link href="/home" className={`font-medium ${isActive('/home') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600 border-b-2 border-transparent pb-1'}`}>Home</Link>
           <Link href="/members" className={`font-medium ${isActive('/members') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600 border-b-2 border-transparent pb-1'}`}>メンバー自己紹介</Link>
           <Link href="/projects" className={`font-medium ${isActive('/projects') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600 border-b-2 border-transparent pb-1'}`}>プロジェクト一覧</Link>          
           <Link href="/contacts" className={`font-medium ${isActive('/contacts') ? 'text-blue-600 font-bold border-b-2 border-blue-600 pb-1' : 'text-gray-500 hover:text-blue-600 border-b-2 border-transparent pb-1'}`}>コンタクト履歴</Link>
@@ -166,7 +166,7 @@ export default function Header() {
         <div className="md:hidden absolute top-full left-0 w-full bg-white border-b shadow-lg flex flex-col p-5 space-y-6 animate-in slide-in-from-top-2">
 
           <nav className="flex flex-col space-y-5 border-b pb-6">
-            <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className={`text-base font-bold ${isActive('/') ? 'text-blue-600' : 'text-gray-700'}`}>Home</Link>
+            <Link href="/home" onClick={() => setIsMobileMenuOpen(false)} className={`text-base font-bold ${isActive('/home') ? 'text-blue-600' : 'text-gray-700'}`}>Home</Link>
             <Link href="/members" onClick={() => setIsMobileMenuOpen(false)} className={`text-base font-bold ${isActive('/members') ? 'text-blue-600' : 'text-gray-700'}`}>メンバー自己紹介</Link>
             <Link href="/projects" onClick={() => setIsMobileMenuOpen(false)} className={`text-base font-bold ${isActive('/projects') ? 'text-blue-600' : 'text-gray-700'}`}>プロジェクト一覧</Link>
             <Link href="/contacts" onClick={() => setIsMobileMenuOpen(false)} className={`text-base font-bold ${isActive('/contacts') ? 'text-blue-600' : 'text-gray-700'}`}>コンタクト履歴</Link>

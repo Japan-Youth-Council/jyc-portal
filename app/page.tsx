@@ -34,14 +34,12 @@ export default function LandingPage() {
         <div className="bg-white p-8 sm:p-10 rounded-2xl shadow-sm border border-gray-200 text-center">
           <h1 className="text-3xl font-bold text-black mb-4">JYC Portal</h1>
           <p className="text-black text-sm sm:text-base leading-relaxed font-bold">
-            JYC Portalは、日本若者協議会（Japan Youth Council）のメンバー専用のプロジェクト・タスク管理システムです。<br />
-            政策委員会や地方支部、各プロジェクトの進行状況を一元管理し、メンバー間の円滑なコミュニケーションと活動を支援します。
-          </p>
+            JYC Portalは、日本若者協議会（Japan Youth Council）の団体内での情報共有・蓄積を目的としたプラットフォームです。          </p>
         </div>
 
         {/* 下部ブロック：ログインと各種リンク */}
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200 text-center">
-          <h2 className="text-lg font-bold text-black mb-6">ログインして始める</h2>
+          <h2 className="text-lg font-bold text-black mb-6">ログイン/新規登録 して始める</h2>
           
           <div className="flex justify-center mb-6">
             <button 
