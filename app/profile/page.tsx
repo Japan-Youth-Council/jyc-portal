@@ -3,9 +3,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { User, Upload, X, Save, Mail, Share } from 'lucide-react'; // ★ Shareを追加
+import { User, Upload, X, Save, Mail, Share } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
-import { toPng } from 'html-to-image'; // ★ 追加
+import { toPng } from 'html-to-image';
 
 // ▼ 切り出したコンポーネントをインポート
 import ProfileExportCard from '@/components/ProfileExportCard';
@@ -23,7 +23,7 @@ export default function ProfileEditPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState({ text: '', isError: false });
-  const [isDownloading, setIsDownloading] = useState(false); // ★ ダウンロード状態の管理
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const [showCompleted, setShowCompleted] = useState(false);
 
@@ -49,7 +49,7 @@ export default function ProfileEditPage() {
         router.push('/');
         return;
       }
-      
+
       let currentUser = session.user;
 
       // 古いGoogleアカウントの自動解除ロジック
@@ -95,7 +95,7 @@ export default function ProfileEditPage() {
       const { data: bData } = await supabase.from('local_branches').select('*').order('created_at');
       const { data: mData } = await supabase.from('major_projects').select('*').order('created_at');
       const { data: pData } = await supabase.from('projects').select('*').order('created_at');
-      
+
       if (cData) setCommitteesList(cData);
       if (bData) setBranchesList(bData);
       if (mData) setMajorProjectsList(mData);
@@ -196,7 +196,7 @@ export default function ProfileEditPage() {
 
       setMessage({ text: 'プロフィールを更新しました。', isError: false });
       setTimeout(() => window.location.reload(), 2000);
-      
+
     } catch (err: any) {
       setMessage({ text: '更新に失敗しました: ' + err.message, isError: true });
     } finally {
@@ -211,8 +211,11 @@ export default function ProfileEditPage() {
     const element = document.getElementById('profile-card-export');
     if (!element) return;
     setIsDownloading(true);
-    
+
     try {
+      // ★ スマホの描画待ちウェイト（0.3秒待つことで写真の変換・描画を確実に完了させる）
+      await new Promise(resolve => setTimeout(resolve, 300));
+
       const dataUrl = await toPng(element, { 
         pixelRatio: 2, 
         backgroundColor: '#ffffff',
@@ -290,14 +293,14 @@ export default function ProfileEditPage() {
         <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-4">
           {visibleParents.map(parent => {
             const isParentChecked = formData[parentField] ? String(formData[parentField]).split(',').includes(parent.name) : false;
-            
+
             const children = projectsList.filter(p => p.parent_type === parentTypeStr && p.parent_name === parent.name);
             const visibleChildren = children.filter(child => {
               const isChildChecked = formData.projects ? String(formData.projects).split(',').includes(child.name) : false;
               if (!showCompleted && child.status === '終了済み' && !isChildChecked) return false;
               return true;
             });
-            
+
             return (
               <div key={parent.name} className="space-y-1.5">
                 <label className={`flex items-center gap-2 text-sm cursor-pointer transition ${parent.status === '進行中' ? 'text-gray-900 font-bold hover:text-blue-600' : 'text-gray-500'}`}>
@@ -305,7 +308,7 @@ export default function ProfileEditPage() {
                   <span className={parent.status === '終了済み' ? 'opacity-80' : ''}>{parent.name}</span>
                   {parent.status !== '進行中' && <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-normal">{parent.status}</span>}
                 </label>
-                
+
                 {visibleChildren.length > 0 && (
                   <div className="pl-6 space-y-1.5 border-l-2 border-gray-200 ml-2 mt-1">
                     {visibleChildren.map(child => {
@@ -333,7 +336,7 @@ export default function ProfileEditPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8 overflow-x-hidden">
       <div className="max-w-2xl mx-auto bg-white p-6 sm:p-10 rounded-2xl shadow-sm border border-gray-200">
-        
+
         {/* ▼ ヘッダーにダウンロードボタンを追加 ▼ */}
         <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
           <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -348,7 +351,7 @@ export default function ProfileEditPage() {
             <Share className="w-4 h-4" /> {isDownloading ? '生成中...' : 'カードを出力・シェア'}
           </button>
         </div>
-        
+
         {message.text && (
           <div className={`p-4 rounded-lg mb-6 font-bold text-sm ${message.isError ? 'bg-red-50 text-red-800 border-l-4 border-red-500' : 'bg-green-50 text-green-800 border-l-4 border-green-500'}`}>
             {message.text}
@@ -356,7 +359,7 @@ export default function ProfileEditPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          
+
           {/* Googleアカウント変更セクション */}
           <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 mb-8">
             <h3 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2"><Mail className="w-4 h-4"/> ログイン用Googleアカウント</h3>
@@ -433,7 +436,7 @@ export default function ProfileEditPage() {
                 終了済みも表示
               </label>
             </div>
-            
+
             {renderTreeSection('所属政策委員会', 'policy_committee', committeesList, '政策委員会')}
             {renderTreeSection('所属地方支部', 'local_branches', branchesList, '地方支部')}
             {renderTreeSection('参加大プロジェクト', 'major_projects', majorProjectsList, '大プロジェクト')}

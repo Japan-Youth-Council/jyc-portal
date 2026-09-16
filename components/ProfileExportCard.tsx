@@ -37,14 +37,13 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
 
     let isMounted = true;
 
-    // ★ スマホの厳しいセキュリティを回避するための特殊な画像読み込み処理
+    // スマホの厳しいセキュリティを回避するための画像データ変換処理
     const convertImageToBase64 = (url: string) => {
       return new Promise<string>((resolve, reject) => {
         const img = new Image();
-        img.crossOrigin = 'anonymous'; // CORSエラーを回避
+        img.crossOrigin = 'anonymous';
         
         img.onload = () => {
-          // メモリ上に透明なキャンバスを作り、そこに画像を一度描画する
           const canvas = document.createElement('canvas');
           canvas.width = img.width;
           canvas.height = img.height;
@@ -52,7 +51,6 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
           
           if (ctx) {
             ctx.drawImage(img, 0, 0);
-            // 描画したものを「安全な文字列データ」として抽出する
             resolve(canvas.toDataURL('image/png'));
           } else {
             reject(new Error('Canvas context is null'));
@@ -60,8 +58,6 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
         };
 
         img.onerror = (error) => reject(error);
-
-        // スマホの強力なキャッシュが悪さをするのを防ぐためのパラメータ付与
         img.src = url.startsWith('http') ? `${url}?t=${new Date().getTime()}` : url;
       });
     };
@@ -72,7 +68,6 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
       })
       .catch((err) => {
         console.warn("画像のBase64変換に失敗しました:", err);
-        // 失敗した場合の最後の砦としてそのままのURLを入れる
         if (isMounted) setBase64Image(member.photo_url);
       });
 
@@ -86,7 +81,6 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
       
       {/* 左側：写真 */}
       <div className="w-[360px] h-full relative bg-gray-200 shrink-0">
-        {/* ★ 生成した安全な画像データを表示 */}
         {base64Image ? (
           <img 
             src={base64Image} 

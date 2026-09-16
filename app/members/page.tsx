@@ -117,9 +117,13 @@ export default function MembersPage() {
     setIsDownloading(true);
     
     try {
+      // ★ スマホの描画待ちウェイト（0.3秒待つことで写真の変換・描画を確実に完了させる）
+      await new Promise(resolve => setTimeout(resolve, 300));
+
       const dataUrl = await toPng(element, { 
         pixelRatio: 2, 
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        cacheBust: true,
       });
 
       const res = await fetch(dataUrl);
