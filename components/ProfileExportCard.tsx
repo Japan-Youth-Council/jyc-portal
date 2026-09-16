@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from 'react';
 import { Star, User, Link as LinkIcon } from 'lucide-react';
 
 // フォントサイズ自動調整関数
@@ -27,6 +28,36 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
   const MAX_BIG_TAGS = 10;
   const MAX_SMALL_TAGS = 5;
 
+  // ★ スマホ特有の画像表示エラーを防ぐため、画像をBase64（文字列データ）に変換して保持する
+  const [base64Image, setBase64Image] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!member?.photo_url) {
+      setBase64Image(null);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchImageAsBase64 = async () => {
+      try {
+        // スマホの厳しいキャッシュ制限を回避するため no-store を付与
+        const response = await fetch(member.photo_url, { cache: 'no-store' });
+        const blob = await response.blob();
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (isMounted) setBase64Image(reader.result as string);
+        };
+        reader.readAsDataURL(blob);
+      } catch (error) {
+        console.error('画像のBase64変換に失敗しました', error);
+        if (isMounted) setBase64Image(member.photo_url); // 失敗時のフォールバック
+      }
+    };
+
+    fetchImageAsBase64();
+    return () => { isMounted = false; };
+  }, [member?.photo_url]);
+
   if (!member) return null;
 
   return (
@@ -34,25 +65,27 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
       
       {/* 左側：写真 */}
       <div className="w-[360px] h-full relative bg-gray-200 shrink-0">
-        {member.photo_url ? (
+        {/* ★ 変換したbase64Imageを使用する */}
+        {base64Image ? (
           <img 
-            src={member.photo_url} 
+            src={base64Image} 
             alt="" 
             className="absolute inset-0 w-full h-full object-cover" 
-            crossOrigin="anonymous" // ★復活：これがないと外部画像でエラーになります
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-gray-500"><User className="w-32 h-32" /></div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-90" />
         
-        <div className="absolute bottom-0 left-0 w-full px-8 pb-10 text-white drop-shadow-lg">
+        {/* ★ エラーの原因となる drop-shadow-lg を削除 */}
+        <div className="absolute bottom-0 left-0 w-full px-8 pb-10 text-white">
           <p className="text-lg font-bold text-gray-200 mb-1 tracking-widest">{member.furigana}</p>
           <h2 className="text-4xl font-bold mb-4">{member.name}</h2>
           <div className="flex gap-2 flex-wrap">
             {member.is_core_member && <span className="bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 border border-yellow-500"><Star className="w-3 h-3 fill-current"/> コアメンバー</span>}
-            <span className="bg-black/50 backdrop-blur text-xs font-bold px-3 py-1 rounded-full border border-gray-400">{member.attribute}</span>
-            <span className="bg-black/50 backdrop-blur text-xs font-bold px-3 py-1 rounded-full border border-gray-400">{member.prefecture}{member.city && ` ${member.city}`}</span>
+            {/* ★ エラーの原因となる backdrop-blur を削除 */}
+            <span className="bg-black/50 text-xs font-bold px-3 py-1 rounded-full border border-gray-400">{member.attribute}</span>
+            <span className="bg-black/50 text-xs font-bold px-3 py-1 rounded-full border border-gray-400">{member.prefecture}{member.city && ` ${member.city}`}</span>
           </div>
         </div>
       </div>
@@ -62,17 +95,13 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
         
         <div className="flex justify-between items-end border-b-2 border-blue-600 pb-2 mb-3">
           <h1 className="text-2xl font-bold text-blue-900 tracking-wider">MEMBER PROFILE</h1>
-          <img 
-            src="/jyc_logo_bl.svg" 
-            alt="JYCロゴ" 
-            className="h-12 object-contain" 
-            crossOrigin="anonymous" // ★復活：ローカルファイルでも念のため付与
-          />
+          <img src="/jyc_logo_bl.svg" alt="JYCロゴ" className="h-12 object-contain" />
         </div>
 
         <div className="mb-3">
           <h3 className="text-xs font-bold text-blue-600 mb-1 flex items-center gap-1"><Star className="w-3 h-3"/> 若者協議会で実現したいこと</h3>
-          <div className="bg-white p-3 rounded-xl border border-gray-300 shadow-sm min-h-[90px] flex items-center">
+          {/* ★ エラーの原因となる shadow-sm を削除 */}
+          <div className="bg-white p-3 rounded-xl border border-gray-300 min-h-[90px] flex items-center">
             <p className={`font-bold text-black break-words w-full ${getDynamicTextClass(member.goal, 'goal')}`}>
               {member.goal || '未設定'}
             </p>
@@ -81,7 +110,8 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
 
         <div className="grid grid-cols-2 gap-2.5 flex-1 pb-2">
           {/* 所属・大PJ */}
-          <div className="bg-white p-3 rounded-xl border border-gray-300 shadow-sm flex flex-col overflow-hidden">
+          {/* ★ 全てのボックスから shadow-sm を削除 */}
+          <div className="bg-white p-3 rounded-xl border border-gray-300 flex flex-col overflow-hidden">
             <h4 className="text-[10px] font-bold text-gray-500 mb-2 border-b border-gray-200 pb-1">所属委員会・大プロジェクト</h4>
             <div className="flex flex-wrap gap-1 overflow-hidden">
               {bigProjects.length > 0 ? (
@@ -98,7 +128,7 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
           </div>
 
           {/* 小プロジェクト */}
-          <div className="bg-white p-3 rounded-xl border border-gray-300 shadow-sm flex flex-col overflow-hidden">
+          <div className="bg-white p-3 rounded-xl border border-gray-300 flex flex-col overflow-hidden">
             <h4 className="text-[10px] font-bold text-gray-500 mb-2 border-b border-gray-200 pb-1">小プロジェクト</h4>
             <div className="flex flex-wrap gap-1 overflow-hidden">
               {smallProjects.length > 0 ? (
@@ -115,7 +145,7 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
           </div>
 
           {/* 外部活動・SNS */}
-          <div className="bg-white p-3 rounded-xl border border-gray-300 shadow-sm flex flex-col overflow-hidden">
+          <div className="bg-white p-3 rounded-xl border border-gray-300 flex flex-col overflow-hidden">
             <h4 className="text-[10px] font-bold text-gray-500 mb-1 border-b border-gray-200 pb-1">JYC以外の活動、SNS</h4>
             <div className="overflow-hidden flex-1 relative mt-1">
               <p className={`font-bold text-black whitespace-pre-wrap break-all ${getDynamicTextClass((member.outside_activities||'') + (member.sns_links||''), 'free')}`}>
@@ -128,7 +158,7 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
           </div>
 
           {/* 自由記述 */}
-          <div className="bg-white p-3 rounded-xl border border-gray-300 shadow-sm flex flex-col overflow-hidden">
+          <div className="bg-white p-3 rounded-xl border border-gray-300 flex flex-col overflow-hidden">
             <h4 className="text-[10px] font-bold text-gray-500 mb-1 border-b border-gray-200 pb-1">自由記述</h4>
             <div className="overflow-hidden flex-1 relative mt-1">
               <p className={`font-bold text-black whitespace-pre-wrap ${getDynamicTextClass(member.free_text, 'free')}`}>
