@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { Star, User, Link as LinkIcon } from 'lucide-react';
 
-// フォントサイズ自動調整関数
 const getDynamicTextClass = (text: string | null | undefined, type: 'goal' | 'free') => {
   const len = text?.length || 0;
   if (type === 'goal') {
@@ -28,7 +27,6 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
   const MAX_BIG_TAGS = 10;
   const MAX_SMALL_TAGS = 5;
 
-  // ★ スマホ特有の画像表示エラーを防ぐため、画像をBase64（文字列データ）に変換して保持する
   const [base64Image, setBase64Image] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,23 +36,46 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
     }
 
     let isMounted = true;
-    const fetchImageAsBase64 = async () => {
-      try {
-        // スマホの厳しいキャッシュ制限を回避するため no-store を付与
-        const response = await fetch(member.photo_url, { cache: 'no-store' });
-        const blob = await response.blob();
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          if (isMounted) setBase64Image(reader.result as string);
+
+    // ★ スマホの厳しいセキュリティを回避するための特殊な画像読み込み処理
+    const convertImageToBase64 = (url: string) => {
+      return new Promise<string>((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous'; // CORSエラーを回避
+        
+        img.onload = () => {
+          // メモリ上に透明なキャンバスを作り、そこに画像を一度描画する
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            // 描画したものを「安全な文字列データ」として抽出する
+            resolve(canvas.toDataURL('image/png'));
+          } else {
+            reject(new Error('Canvas context is null'));
+          }
         };
-        reader.readAsDataURL(blob);
-      } catch (error) {
-        console.error('画像のBase64変換に失敗しました', error);
-        if (isMounted) setBase64Image(member.photo_url); // 失敗時のフォールバック
-      }
+
+        img.onerror = (error) => reject(error);
+
+        // スマホの強力なキャッシュが悪さをするのを防ぐためのパラメータ付与
+        img.src = url.startsWith('http') ? `${url}?t=${new Date().getTime()}` : url;
+      });
     };
 
-    fetchImageAsBase64();
+    convertImageToBase64(member.photo_url)
+      .then(base64 => {
+        if (isMounted) setBase64Image(base64);
+      })
+      .catch((err) => {
+        console.warn("画像のBase64変換に失敗しました:", err);
+        // 失敗した場合の最後の砦としてそのままのURLを入れる
+        if (isMounted) setBase64Image(member.photo_url);
+      });
+
     return () => { isMounted = false; };
   }, [member?.photo_url]);
 
@@ -65,7 +86,7 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
       
       {/* 左側：写真 */}
       <div className="w-[360px] h-full relative bg-gray-200 shrink-0">
-        {/* ★ 変換したbase64Imageを使用する */}
+        {/* ★ 生成した安全な画像データを表示 */}
         {base64Image ? (
           <img 
             src={base64Image} 
@@ -77,13 +98,11 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-90" />
         
-        {/* ★ エラーの原因となる drop-shadow-lg を削除 */}
         <div className="absolute bottom-0 left-0 w-full px-8 pb-10 text-white">
           <p className="text-lg font-bold text-gray-200 mb-1 tracking-widest">{member.furigana}</p>
           <h2 className="text-4xl font-bold mb-4">{member.name}</h2>
           <div className="flex gap-2 flex-wrap">
             {member.is_core_member && <span className="bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 border border-yellow-500"><Star className="w-3 h-3 fill-current"/> コアメンバー</span>}
-            {/* ★ エラーの原因となる backdrop-blur を削除 */}
             <span className="bg-black/50 text-xs font-bold px-3 py-1 rounded-full border border-gray-400">{member.attribute}</span>
             <span className="bg-black/50 text-xs font-bold px-3 py-1 rounded-full border border-gray-400">{member.prefecture}{member.city && ` ${member.city}`}</span>
           </div>
@@ -100,7 +119,6 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
 
         <div className="mb-3">
           <h3 className="text-xs font-bold text-blue-600 mb-1 flex items-center gap-1"><Star className="w-3 h-3"/> 若者協議会で実現したいこと</h3>
-          {/* ★ エラーの原因となる shadow-sm を削除 */}
           <div className="bg-white p-3 rounded-xl border border-gray-300 min-h-[90px] flex items-center">
             <p className={`font-bold text-black break-words w-full ${getDynamicTextClass(member.goal, 'goal')}`}>
               {member.goal || '未設定'}
@@ -110,7 +128,6 @@ export default function ProfileExportCard({ member, bigProjects, smallProjects }
 
         <div className="grid grid-cols-2 gap-2.5 flex-1 pb-2">
           {/* 所属・大PJ */}
-          {/* ★ 全てのボックスから shadow-sm を削除 */}
           <div className="bg-white p-3 rounded-xl border border-gray-300 flex flex-col overflow-hidden">
             <h4 className="text-[10px] font-bold text-gray-500 mb-2 border-b border-gray-200 pb-1">所属委員会・大プロジェクト</h4>
             <div className="flex flex-wrap gap-1 overflow-hidden">
