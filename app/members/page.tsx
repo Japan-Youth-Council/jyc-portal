@@ -2,26 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Search, Star, Clock, Shuffle, X, User, Filter, Share, Link as LinkIcon } from 'lucide-react';
-import { toPng } from 'html-to-image';
+import { Search, Star, Clock, Shuffle, X, User, Filter } from 'lucide-react';
 
 // ▼ 作成したコンポーネントをインポート
 import ProfileExportCard from '@/components/ProfileExportCard';
-
-// 画面表示用のフォントサイズ自動調整関数
-const getDynamicTextClass = (text: string | null | undefined, type: 'goal' | 'free') => {
-  const len = text?.length || 0;
-  if (type === 'goal') {
-    if (len < 60) return 'text-lg leading-relaxed';
-    if (len < 120) return 'text-base leading-relaxed';
-    if (len < 180) return 'text-sm leading-normal';
-    return 'text-xs leading-snug';
-  } else {
-    if (len < 50) return 'text-[11px] leading-relaxed';
-    if (len < 100) return 'text-[10px] leading-normal';
-    return 'text-[9px] leading-snug';
-  }
-};
 
 export default function MembersPage() {
   const [members, setMembers] = useState<any[]>([]);
@@ -42,7 +26,6 @@ export default function MembersPage() {
   
   const [sortMode, setSortMode] = useState<'random' | 'recent'>('random');
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -109,46 +92,6 @@ export default function MembersPage() {
       const itemData = masterList.find(m => m.name === itemName);
       return { name: itemName, status: itemData ? itemData.status : '進行中' };
     }).filter(item => showCompleted || item.status !== '終了済み');
-  };
-
-  const handleDownloadProfile = async () => {
-    const element = document.getElementById('profile-card-export');
-    if (!element) return;
-    setIsDownloading(true);
-    
-    try {
-      // ★ スマホの描画待ちウェイト（0.3秒待つことで写真の変換・描画を確実に完了させる）
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      const dataUrl = await toPng(element, { 
-        pixelRatio: 2, 
-        backgroundColor: '#ffffff',
-        cacheBust: true,
-      });
-
-      const res = await fetch(dataUrl);
-      const blob = await res.blob();
-      const file = new File([blob], `${selectedMember.name}_JYCProfile.png`, { type: 'image/png' });
-
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-      if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'JYC プロフィールカード',
-        });
-      } else {
-        const link = document.createElement('a');
-        link.download = file.name;
-        link.href = dataUrl;
-        link.click();
-      }
-    } catch (err) {
-      console.error('画像保存エラー:', err);
-      alert('画像の保存・共有に失敗しました。');
-    } finally {
-      setIsDownloading(false);
-    }
   };
 
   const getExportTags = () => {
@@ -271,14 +214,18 @@ export default function MembersPage() {
           
           <div className="relative bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
             
-            <button 
-              onClick={handleDownloadProfile} 
-              disabled={isDownloading}
-              className="absolute top-4 right-14 z-20 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full transition shadow-lg flex items-center gap-1 disabled:opacity-50"
-              title="画像をシェア・保存"
-            >
-              <Share className="w-5 h-5" />
-            </button>
+            {/* ▼ 共通化された ProfileExportCard コンポーネントを配置 */}
+            <div className="absolute top-4 right-14 z-20">
+              <ProfileExportCard 
+                member={selectedMember} 
+                bigProjects={bigProjects} 
+                smallProjects={smallProjects}
+                buttonClassName="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full transition shadow-lg flex items-center gap-1 disabled:opacity-50"
+                buttonText=""
+                showIcon={true}
+              />
+            </div>
+            
             <button onClick={() => setSelectedMember(null)} className="absolute top-4 right-4 z-20 bg-black/40 hover:bg-black/60 text-white p-2 rounded-full transition backdrop-blur-md">
               <X className="w-5 h-5" />
             </button>
@@ -350,15 +297,6 @@ export default function MembersPage() {
                   <p className="text-black text-sm whitespace-pre-wrap leading-relaxed font-bold">{selectedMember.free_text}</p>
                 </div>
               )}
-            </div>
-            
-            {/* ▼ 切り出したコンポーネントを配置 */}
-            <div className="absolute -left-[9999px] -top-[9999px]">
-              <ProfileExportCard 
-                member={selectedMember} 
-                bigProjects={bigProjects} 
-                smallProjects={smallProjects} 
-              />
             </div>
 
           </div>

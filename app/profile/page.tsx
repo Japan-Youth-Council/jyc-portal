@@ -3,9 +3,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { User, Upload, X, Save, Mail, Share } from 'lucide-react';
+import { User, Upload, X, Save, Mail } from 'lucide-react';
 import imageCompression from 'browser-image-compression';
-import { toPng } from 'html-to-image';
 
 // ▼ 切り出したコンポーネントをインポート
 import ProfileExportCard from '@/components/ProfileExportCard';
@@ -23,7 +22,6 @@ export default function ProfileEditPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState({ text: '', isError: false });
-  const [isDownloading, setIsDownloading] = useState(false);
 
   const [showCompleted, setShowCompleted] = useState(false);
 
@@ -205,49 +203,8 @@ export default function ProfileEditPage() {
   };
 
   // ==========================================
-  // ▼ エクスポート用の処理とデータ構築 ▼
+  // ▼ エクスポート用データ構築 ▼
   // ==========================================
-  const handleDownloadProfile = async () => {
-    const element = document.getElementById('profile-card-export');
-    if (!element) return;
-    setIsDownloading(true);
-
-    try {
-      // ★ スマホの描画待ちウェイト（0.3秒待つことで写真の変換・描画を確実に完了させる）
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      const dataUrl = await toPng(element, { 
-        pixelRatio: 2, 
-        backgroundColor: '#ffffff',
-        cacheBust: true,
-      });
-
-      const res = await fetch(dataUrl);
-      const blob = await res.blob();
-      const fileName = formData.name ? `${formData.name}_JYCProfile.png` : 'JYCProfile.png';
-      const file = new File([blob], fileName, { type: 'image/png' });
-
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-      if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'JYC プロフィールカード',
-        });
-      } else {
-        const link = document.createElement('a');
-        link.download = file.name;
-        link.href = dataUrl;
-        link.click();
-      }
-    } catch (err) {
-      console.error('画像保存エラー:', err);
-      alert('画像の保存・共有に失敗しました。');
-    } finally {
-      setIsDownloading(false);
-    }
-  };
-
   // 入力中のデータをエクスポート用コンポーネントの形式に合わせる
   const exportMemberData = {
     ...formData,
@@ -276,7 +233,6 @@ export default function ProfileEditPage() {
 
   const { bigProjects, smallProjects } = getExportTags();
   // ==========================================
-
 
   const renderTreeSection = (title: string, parentField: keyof typeof formData, parents: any[], parentTypeStr: string) => {
     const visibleParents = parents.filter(parent => {
@@ -335,21 +291,18 @@ export default function ProfileEditPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8 overflow-x-hidden">
-      <div className="max-w-2xl mx-auto bg-white p-6 sm:p-10 rounded-2xl shadow-sm border border-gray-200">
+      <div className="max-w-2xl mx-auto bg-white p-6 sm:p-10 rounded-2xl shadow-sm border border-gray-200 relative">
 
-        {/* ▼ ヘッダーにダウンロードボタンを追加 ▼ */}
+        {/* ▼ ヘッダーに ProfileExportCard コンポーネントを配置 ▼ */}
         <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
           <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <User className="w-6 h-6 text-blue-600"/> プロフィール設定
           </h2>
-          <button 
-            type="button" 
-            onClick={handleDownloadProfile}
-            disabled={isDownloading}
-            className="flex items-center justify-center gap-2 bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition px-4 py-2 rounded-lg text-sm font-bold shadow-sm disabled:opacity-50 w-full sm:w-auto"
-          >
-            <Share className="w-4 h-4" /> {isDownloading ? '生成中...' : 'カードを出力・シェア'}
-          </button>
+          <ProfileExportCard 
+            member={exportMemberData} 
+            bigProjects={bigProjects} 
+            smallProjects={smallProjects} 
+          />
         </div>
 
         {message.text && (
@@ -453,15 +406,6 @@ export default function ProfileEditPage() {
             </button>
           </div>
         </form>
-      </div>
-
-      {/* ▼ エクスポート用の隠しレイヤー ▼ */}
-      <div className="absolute -left-[9999px] -top-[9999px]">
-        <ProfileExportCard 
-          member={exportMemberData} 
-          bigProjects={bigProjects} 
-          smallProjects={smallProjects} 
-        />
       </div>
 
     </div>
