@@ -39,7 +39,10 @@ export default function ProfileExportCard({
   const MAX_SMALL_TAGS = 5;
 
   const [base64Image, setBase64Image] = useState<string | null>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
+  
+  // ▼ 事前に生成した画像ファイルをストックしておくためのState
+  const [readyFile, setReadyFile] = useState<File | null>(null);
+  const [isPreparing, setIsPreparing] = useState(true); // 裏側で準備中かどうか
 
   useEffect(() => {
     if (!member?.photo_url) {
@@ -76,62 +79,92 @@ export default function ProfileExportCard({
     return () => { isMounted = false; };
   }, [member?.photo_url]);
 
-  // 【最重要】ユーザーがボタンを押す前に、裏側で「1回目」を自動で済ませておく処理
+  // ==========================================
+  // 【最重要】裏側での事前生成処理
+  // あなたが手動でやっていた連続操作を、ユーザーがボタンを押す前に完了させる
+  // ==========================================
   useEffect(() => {
-    const element = document.getElementById('profile-card-export');
-    if (!element) return;
+    // データが揃っていない場合は待機
+    if (!member || (!base64Image && member.photo_url)) return;
 
-    // データが揃ってから約1秒後に、ユーザーに気づかれないよう裏で画像を1回生成し、Safariにキャッシュさせる
+    let isMounted = true;
+
+    const prepareImage = async () => {
+      const element = document.getElementById('profile-card-export');
+      if (!element) return;
+
+      try {
+        // 1. 【Safariに記憶させるための1回目】
+        await toPng(element, { pixelRatio: 1, backgroundColor: '#ffffff' }).catch(() => {});
+        
+        // ブラウザに一瞬だけ考える時間（レンダリングサイクル）を与える
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // 2. 【本番の2回目】記憶を元に高画質で生成
+        const dataUrl = await toPng(element, { 
+          pixelRatio: 2, 
+          backgroundColor: '#ffffff'
+        });
+
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        const fileName = member?.name ? `${member.name}_JYCProfile.png` : 'JYCProfile.png';
+        const file = new File([blob], fileName, { type: 'image/png' });
+
+        if (isMounted) {
+          setReadyFile(file); // 完成した画像をストックする
+          setIsPreparing(false); // 準備完了
+        }
+      } catch (err) {
+        console.error("事前生成エラー:", err);
+        if (isMounted) setIsPreparing(false);
+      }
+    };
+
+    // 画面が表示されてから1秒後に、ユーザーの邪魔にならないよう裏側でこっそり処理を開始
     const timer = setTimeout(() => {
-      toPng(element, { pixelRatio: 1 }).catch(() => {});
+      prepareImage();
     }, 1000);
 
-    return () => clearTimeout(timer);
-  }, [base64Image, member]); // 写真データ等が読み込まれたタイミングで発火
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [member, base64Image]);
 
+
+  // ==========================================
+  // ボタンを押した時の処理（待たずに即座に出力するだけ）
+  // ==========================================
   const handleDownloadProfile = async () => {
-    const element = document.getElementById('profile-card-export');
-    if (!element) return;
-    setIsDownloading(true);
+    if (!readyFile) {
+      alert('画像の準備が完了していません。もう少し待ってから再度お試しください。');
+      return;
+    }
     
     try {
-      // 【あなたが発見した連続実行の法則】
-      // 待機時間（ラグ）を一切入れず、画像処理を連続で叩いてSafariに強制キャッシュさせる
-      // ※1回目で写真のデコードを開始させ、2・3回目でメモリに完全に定着させる
-      await toPng(element, { pixelRatio: 1 }).catch(() => {});
-      await toPng(element, { pixelRatio: 1 }).catch(() => {});
-      await toPng(element, { pixelRatio: 1 }).catch(() => {});
-
-      // キャッシュが温まりきった直後に、本番の高画質出力を行う
-      const dataUrl = await toPng(element, { 
-        pixelRatio: 2, 
-        backgroundColor: '#ffffff'
-      });
-
-      // ▼ 元々動いていたシェア機能（写真アプリへの保存）
-      const res = await fetch(dataUrl);
-      const blob = await res.blob();
-      const fileName = member?.name ? `${member.name}_JYCProfile.png` : 'JYCProfile.png';
-      const file = new File([blob], fileName, { type: 'image/png' });
-
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-      if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
+      if (isMobile && navigator.canShare && navigator.canShare({ files: [readyFile] })) {
+        // スマホ：完成済みの画像をそのまま渡す（処理時間0秒なので絶対にブロックされない）
         await navigator.share({
-          files: [file],
+          files: [readyFile],
           title: 'JYC プロフィールカード',
         });
       } else {
+        // PC等：Blob URLを使って安全にダウンロード
+        const blobUrl = URL.createObjectURL(readyFile);
         const link = document.createElement('a');
-        link.download = file.name;
-        link.href = dataUrl;
+        link.download = readyFile.name;
+        link.href = blobUrl;
+        document.body.appendChild(link);
         link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
       }
     } catch (err) {
-      console.error('画像保存エラー:', err);
+      console.error('画像保存・シェアエラー:', err);
       alert('画像の保存・共有に失敗しました。');
-    } finally {
-      setIsDownloading(false);
     }
   };
 
@@ -142,12 +175,12 @@ export default function ProfileExportCard({
       <button 
         type="button" 
         onClick={handleDownloadProfile}
-        disabled={isDownloading}
+        disabled={isPreparing} // 準備ができるまでは押せないようにする
         className={buttonClassName}
         title="画像をシェア・保存"
       >
         {showIcon && <Share className="w-5 h-5" />}
-        <span>{isDownloading ? '生成中...' : buttonText}</span>
+        <span>{isPreparing ? '画像準備中...' : buttonText}</span>
       </button>
 
       {/* 画面外への隠しレイヤー */}
