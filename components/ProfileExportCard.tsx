@@ -95,13 +95,20 @@ export default function ProfileExportCard({
     setIsDownloading(true);
     
     try {
-      // すでに裏側で「1回目」が終わっているため、これは「あなたが手動でやった2回目」と同じ状態。
-      // 処理が爆速で終わるため、iPhoneの1秒ロックに引っかからない。
+      // 【あなたが発見した連続実行の法則】
+      // 待機時間（ラグ）を一切入れず、画像処理を連続で叩いてSafariに強制キャッシュさせる
+      // ※1回目で写真のデコードを開始させ、2・3回目でメモリに完全に定着させる
+      await toPng(element, { pixelRatio: 1 }).catch(() => {});
+      await toPng(element, { pixelRatio: 1 }).catch(() => {});
+      await toPng(element, { pixelRatio: 1 }).catch(() => {});
+
+      // キャッシュが温まりきった直後に、本番の高画質出力を行う
       const dataUrl = await toPng(element, { 
         pixelRatio: 2, 
         backgroundColor: '#ffffff'
       });
 
+      // ▼ 元々動いていたシェア機能（写真アプリへの保存）
       const res = await fetch(dataUrl);
       const blob = await res.blob();
       const fileName = member?.name ? `${member.name}_JYCProfile.png` : 'JYCProfile.png';
