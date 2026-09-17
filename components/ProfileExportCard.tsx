@@ -91,18 +91,19 @@ export default function ProfileExportCard({
     setIsDownloading(true);
     
     try {
-      // 【完全版】スマホ特有の画像欠落を防ぐトリプル・レンダリング
-      
-      // 1回目：解像度を極端に落としてDOM要素の解析とアセット読み込みを強制
-      await toPng(element, { pixelRatio: 0.1 });
-      
-      // 2回目：グラデーションや絶対配置のCSS合成をブラウザのメモリに定着させる
-      await toPng(element, { pixelRatio: 0.5 });
-      
-      // 記憶が定着するまで一瞬待機
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // 1. 【疑似的な1回目のクリック（空打ち）】
+      // スマホに「これからこの画像を処理するぞ」と教えるためのダミー実行
+      await toPng(element, { pixelRatio: 1 }).catch(() => {});
 
-      // 3回目：本番出力（cacheBustを外し、1・2回目の記憶をフル活用する）
+      // 2. 【エラー表示をキャンセルして閉じるまでの時間をシミュレート】
+      // requestAnimationFrameを使ってブラウザの画面描画を強制更新しつつ、0.5秒待つ
+      await new Promise(resolve => {
+        requestAnimationFrame(() => {
+          setTimeout(resolve, 500); 
+        });
+      });
+
+      // 3. 【すかさず再度ボタンを押した状態（本番実行）】
       const dataUrl = await toPng(element, { 
         pixelRatio: 2, 
         backgroundColor: '#ffffff',
@@ -149,8 +150,10 @@ export default function ProfileExportCard({
         <span>{isDownloading ? '生成中...' : buttonText}</span>
       </button>
 
-      {/* エクスポート用の隠しレイヤー */}
-      <div className="absolute -left-[9999px] -top-[9999px] pointer-events-none">
+      {/* ▼ 修正の超重要ポイント：画面外（-left-9999px）に隠すのをやめる ▼ */}
+      {/* 代わりに fixed で画面に重ねつつ、opacity-0 と z-index で「透明な幽霊」にする */}
+      <div className="fixed top-0 left-0 z-[-9999] opacity-0 pointer-events-none">
+        
         <div id="profile-card-export" className="w-[960px] h-[540px] bg-gray-50 flex overflow-hidden font-sans border border-gray-200 relative">
           
           {/* 左側：写真 */}
