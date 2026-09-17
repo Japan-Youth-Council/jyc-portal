@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { Star, User, Link as LinkIcon, Share } from 'lucide-react';
+import { Share } from 'lucide-react'; // 画面のボタン用のみ残す
 import { toPng } from 'html-to-image';
 
 const getDynamicTextClass = (text: string | null | undefined, type: 'goal' | 'free') => {
@@ -32,7 +32,7 @@ export default function ProfileExportCard({
   bigProjects, 
   smallProjects,
   buttonClassName = "flex items-center justify-center gap-2 bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition px-4 py-2 rounded-lg text-sm font-bold shadow-sm disabled:opacity-50 w-full sm:w-auto",
-  buttonText = "カードを出力・シェア",
+  buttonText = "【テスト1】アイコン・グラデ抜き",
   showIcon = true
 }: ProfileExportCardProps) {
   const MAX_BIG_TAGS = 10;
@@ -82,7 +82,7 @@ export default function ProfileExportCard({
     setIsDownloading(true);
     
     try {
-      // 純粋に1回だけ実行
+      // 純粋に1回だけ実行（前回成功したロジック）
       const dataUrl = await toPng(element, { 
         pixelRatio: 2, 
         backgroundColor: '#ffffff'
@@ -90,7 +90,7 @@ export default function ProfileExportCard({
 
       const res = await fetch(dataUrl);
       const blob = await res.blob();
-      const fileName = member?.name ? `${member.name}_JYCProfile.png` : 'JYCProfile.png';
+      const fileName = member?.name ? `${member.name}_Test1.png` : 'Test1.png';
       const file = new File([blob], fileName, { type: 'image/png' });
 
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -98,7 +98,7 @@ export default function ProfileExportCard({
       if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: 'JYC プロフィールカード',
+          title: 'テスト画像',
         });
       } else {
         const link = document.createElement('a');
@@ -108,7 +108,7 @@ export default function ProfileExportCard({
       }
     } catch (err) {
       console.error('画像保存エラー:', err);
-      alert('画像の保存・共有に失敗しました。');
+      alert('画像の保存に失敗しました。');
     } finally {
       setIsDownloading(false);
     }
@@ -123,12 +123,12 @@ export default function ProfileExportCard({
         onClick={handleDownloadProfile}
         disabled={isDownloading}
         className={buttonClassName}
-        title="画像をシェア・保存"
       >
         {showIcon && <Share className="w-5 h-5" />}
         <span>{isDownloading ? '処理中...' : buttonText}</span>
       </button>
 
+      {/* 前回成功した opacity: 0.01 の配置 */}
       <div 
         style={{
           position: 'fixed',
@@ -143,24 +143,20 @@ export default function ProfileExportCard({
         <div id="profile-card-export" className="w-[960px] h-[540px] bg-gray-50 flex overflow-hidden font-sans border border-gray-200 relative">
           
           <div className="w-[360px] h-full relative bg-gray-200 shrink-0">
-            {/* ▼ 修正箇所: <img>タグを廃止し、背景画像(backgroundImage)として指定 ▼ */}
             {base64Image ? (
-              <div 
-                className="absolute inset-0 w-full h-full bg-cover bg-center"
-                style={{ backgroundImage: `url("${base64Image}")` }}
-              />
+              <img src={base64Image} alt="" className="absolute inset-0 w-full h-full object-cover" decoding="sync" />
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center text-gray-500">
-                <User className="w-32 h-32" />
-              </div>
+              <div className="absolute inset-0 flex items-center justify-center text-gray-500">No Image</div>
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-90" />
+            
+            {/* ▼ 削除：グラデーション (bg-gradient-to-t) ▼ */}
             
             <div className="absolute bottom-0 left-0 w-full px-8 pb-10 text-white">
-              <p className="text-lg font-bold text-gray-200 mb-1 tracking-widest">{member.furigana}</p>
-              <h2 className="text-4xl font-bold mb-4">{member.name}</h2>
+              <p className="text-lg font-bold text-gray-800 mb-1 tracking-widest">{member.furigana}</p>
+              <h2 className="text-4xl font-bold mb-4 text-black">{member.name}</h2>
               <div className="flex gap-2 flex-wrap">
-                {member.is_core_member && <span className="bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 border border-yellow-500"><Star className="w-3 h-3 fill-current"/> コアメンバー</span>}
+                {/* ▼ 削除：Starアイコン ▼ */}
+                {member.is_core_member && <span className="bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 border border-yellow-500">コアメンバー</span>}
                 <span className="bg-black/50 text-xs font-bold px-3 py-1 rounded-full border border-gray-400">{member.attribute}</span>
                 <span className="bg-black/50 text-xs font-bold px-3 py-1 rounded-full border border-gray-400">{member.prefecture}{member.city && ` ${member.city}`}</span>
               </div>
@@ -170,11 +166,13 @@ export default function ProfileExportCard({
           <div className="flex-1 p-6 bg-gray-50 flex flex-col justify-between relative">
             <div className="flex justify-between items-end border-b-2 border-blue-600 pb-2 mb-3">
               <h1 className="text-2xl font-bold text-blue-900 tracking-wider">MEMBER PROFILE</h1>
-              <img src="/jyc_logo_bl.svg" alt="JYCロゴ" className="h-12 object-contain" />
+              {/* ▼ 削除：JYCロゴSVG ▼ */}
+              <div className="h-12 font-bold text-blue-900 flex items-end">JYC LOGO</div>
             </div>
 
             <div className="mb-3">
-              <h3 className="text-xs font-bold text-blue-600 mb-1 flex items-center gap-1"><Star className="w-3 h-3"/> 若者協議会で実現したいこと</h3>
+              {/* ▼ 削除：Starアイコン ▼ */}
+              <h3 className="text-xs font-bold text-blue-600 mb-1 flex items-center gap-1">若者協議会で実現したいこと</h3>
               <div className="bg-white p-3 rounded-xl border border-gray-300 min-h-[90px] flex items-center">
                 <p className={`font-bold text-black break-words w-full ${getDynamicTextClass(member.goal, 'goal')}`}>{member.goal || '未設定'}</p>
               </div>
@@ -215,7 +213,8 @@ export default function ProfileExportCard({
                   <p className={`font-bold text-black whitespace-pre-wrap break-all ${getDynamicTextClass((member.outside_activities||'') + (member.sns_links||''), 'free')}`}>
                     {member.outside_activities && <span>{member.outside_activities}</span>}
                     {member.outside_activities && member.sns_links && <br/>}
-                    {member.sns_links && <span className="text-blue-600 flex items-start gap-1"><LinkIcon className="w-3 h-3 shrink-0 mt-0.5"/><span>{member.sns_links}</span></span>}
+                    {/* ▼ 削除：LinkIcon ▼ */}
+                    {member.sns_links && <span className="text-blue-600 flex items-start gap-1"><span>{member.sns_links}</span></span>}
                     {!member.outside_activities && !member.sns_links && <span className="text-gray-500">未設定</span>}
                   </p>
                 </div>
