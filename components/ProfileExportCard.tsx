@@ -22,7 +22,6 @@ interface ProfileExportCardProps {
   member: any;
   bigProjects: any[];
   smallProjects: any[];
-  // ▼ 親コンポーネントからボタンの見た目（className）などを注入できるようにする
   buttonClassName?: string;
   buttonText?: string;
   showIcon?: boolean;
@@ -86,24 +85,27 @@ export default function ProfileExportCard({
     return () => { isMounted = false; };
   }, [member?.photo_url]);
 
-  // ▼ ダウンロード処理（ダブルレンダリング・ハック内包）
   const handleDownloadProfile = async () => {
     const element = document.getElementById('profile-card-export');
     if (!element) return;
     setIsDownloading(true);
     
     try {
-      // 1. 【Safari対策】1回目の空打ちダミーレンダリング
-      await toPng(element, { pixelRatio: 1, cacheBust: true }).catch(() => {});
-
-      // 2. メモリ展開待ち
+      // 【完全版】スマホ特有の画像欠落を防ぐトリプル・レンダリング
+      
+      // 1回目：解像度を極端に落としてDOM要素の解析とアセット読み込みを強制
+      await toPng(element, { pixelRatio: 0.1 });
+      
+      // 2回目：グラデーションや絶対配置のCSS合成をブラウザのメモリに定着させる
+      await toPng(element, { pixelRatio: 0.5 });
+      
+      // 記憶が定着するまで一瞬待機
       await new Promise(resolve => setTimeout(resolve, 300));
 
-      // 3. 本番画像生成
+      // 3回目：本番出力（cacheBustを外し、1・2回目の記憶をフル活用する）
       const dataUrl = await toPng(element, { 
         pixelRatio: 2, 
         backgroundColor: '#ffffff',
-        cacheBust: true,
       });
 
       const res = await fetch(dataUrl);
@@ -136,7 +138,6 @@ export default function ProfileExportCard({
 
   return (
     <>
-      {/* ▼ ダウンロード用トリガーボタン（表示位置は親コンポーネントで調整可能） ▼ */}
       <button 
         type="button" 
         onClick={handleDownloadProfile}
@@ -148,7 +149,7 @@ export default function ProfileExportCard({
         <span>{isDownloading ? '生成中...' : buttonText}</span>
       </button>
 
-      {/* ▼ エクスポート用の隠しレイヤー（画面外に配置） ▼ */}
+      {/* エクスポート用の隠しレイヤー */}
       <div className="absolute -left-[9999px] -top-[9999px] pointer-events-none">
         <div id="profile-card-export" className="w-[960px] h-[540px] bg-gray-50 flex overflow-hidden font-sans border border-gray-200 relative">
           
