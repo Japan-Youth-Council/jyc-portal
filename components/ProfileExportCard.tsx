@@ -91,45 +91,22 @@ export default function ProfileExportCard({
     setIsDownloading(true);
     
     try {
-      // 1. 【疑似的な1回目のクリック（空打ち）】
-      // スマホに「これからこの画像を処理するぞ」と教えるためのダミー実行
-      await toPng(element, { pixelRatio: 1 }).catch(() => {});
-
-      // 2. 【エラー表示をキャンセルして閉じるまでの時間をシミュレート】
-      // requestAnimationFrameを使ってブラウザの画面描画を強制更新しつつ、0.5秒待つ
-      await new Promise(resolve => {
-        requestAnimationFrame(() => {
-          setTimeout(resolve, 500); 
-        });
-      });
-
-      // 3. 【すかさず再度ボタンを押した状態（本番実行）】
+      // スマホ・PC問わず、シンプルに1回だけ画像生成を実行
       const dataUrl = await toPng(element, { 
         pixelRatio: 2, 
         backgroundColor: '#ffffff',
       });
 
-      const res = await fetch(dataUrl);
-      const blob = await res.blob();
+      // 共有メニューを使わず、PCと同じ<a>タグによる強制ダウンロード処理のみを実行
       const fileName = member?.name ? `${member.name}_JYCProfile.png` : 'JYCProfile.png';
-      const file = new File([blob], fileName, { type: 'image/png' });
-
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-      if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-          title: 'JYC プロフィールカード',
-        });
-      } else {
-        const link = document.createElement('a');
-        link.download = file.name;
-        link.href = dataUrl;
-        link.click();
-      }
+      const link = document.createElement('a');
+      link.download = fileName;
+      link.href = dataUrl;
+      link.click();
+      
     } catch (err) {
       console.error('画像保存エラー:', err);
-      alert('画像の保存・共有に失敗しました。');
+      alert('画像の保存に失敗しました。');
     } finally {
       setIsDownloading(false);
     }
@@ -144,14 +121,13 @@ export default function ProfileExportCard({
         onClick={handleDownloadProfile}
         disabled={isDownloading}
         className={buttonClassName}
-        title="画像をシェア・保存"
+        title="画像をダウンロード"
       >
         {showIcon && <Share className="w-5 h-5" />}
         <span>{isDownloading ? '生成中...' : buttonText}</span>
       </button>
 
-      {/* ▼ 修正の超重要ポイント：画面外（-left-9999px）に隠すのをやめる ▼ */}
-      {/* 代わりに fixed で画面に重ねつつ、opacity-0 と z-index で「透明な幽霊」にする */}
+      {/* 画面外への隠しレイヤー */}
       <div className="fixed top-0 left-0 z-[-9999] opacity-0 pointer-events-none">
         
         <div id="profile-card-export" className="w-[960px] h-[540px] bg-gray-50 flex overflow-hidden font-sans border border-gray-200 relative">
