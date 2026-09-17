@@ -82,7 +82,7 @@ export default function ProfileExportCard({
     setIsDownloading(true);
     
     try {
-      // ダブルレンダリング等は不要になり、純粋に1回だけ実行します
+      // 純粋に1回だけ実行
       const dataUrl = await toPng(element, { 
         pixelRatio: 2, 
         backgroundColor: '#ffffff'
@@ -129,12 +129,6 @@ export default function ProfileExportCard({
         <span>{isDownloading ? '処理中...' : buttonText}</span>
       </button>
 
-      {/* 
-        ▼ 解決の鍵となったCSSハック ▼
-        -left-[9999px] の使用を禁止。
-        Safariが「画面内に存在する」と認識するよう、fixed で画面左上に配置しつつ、
-        opacity: 0.01 で透明にし、pointer-events-none で操作を邪魔しないようにする。
-      */}
       <div 
         style={{
           position: 'fixed',
@@ -146,19 +140,19 @@ export default function ProfileExportCard({
           transform: 'translateZ(0)'
         }}
       >
-        {/* ここから元のフルレイアウトを復元 */}
         <div id="profile-card-export" className="w-[960px] h-[540px] bg-gray-50 flex overflow-hidden font-sans border border-gray-200 relative">
           
           <div className="w-[360px] h-full relative bg-gray-200 shrink-0">
+            {/* ▼ 修正箇所: <img>タグを廃止し、背景画像(backgroundImage)として指定 ▼ */}
             {base64Image ? (
-              <img 
-                src={base64Image} 
-                alt="" 
-                className="absolute inset-0 w-full h-full object-cover"
-                decoding="sync" /* 念のため画像読み込みの遅延を防ぐ属性も残します */
+              <div 
+                className="absolute inset-0 w-full h-full bg-cover bg-center"
+                style={{ backgroundImage: `url("${base64Image}")` }}
               />
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center text-gray-500"><User className="w-32 h-32" /></div>
+              <div className="absolute inset-0 flex items-center justify-center text-gray-500">
+                <User className="w-32 h-32" />
+              </div>
             )}
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-90" />
             
@@ -235,10 +229,7 @@ export default function ProfileExportCard({
               </div>
             </div>
           </div>
-
-          <div className="absolute bottom-3 right-5 text-[9px] font-bold text-gray-400 pointer-events-none">
-            Generated on {new Date().toLocaleDateString('ja-JP')}
-          </div>
+          
         </div>
       </div>
     </>
