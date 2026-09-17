@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { Share } from 'lucide-react'; // 画面のボタン用のみ残す
+import { Share } from 'lucide-react'; 
 import { toPng } from 'html-to-image';
 
 const getDynamicTextClass = (text: string | null | undefined, type: 'goal' | 'free') => {
@@ -32,7 +32,7 @@ export default function ProfileExportCard({
   bigProjects, 
   smallProjects,
   buttonClassName = "flex items-center justify-center gap-2 bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition px-4 py-2 rounded-lg text-sm font-bold shadow-sm disabled:opacity-50 w-full sm:w-auto",
-  buttonText = "【テスト1】アイコン・グラデ抜き",
+  buttonText = "【テスト2】準備完了を待つ",
   showIcon = true
 }: ProfileExportCardProps) {
   const MAX_BIG_TAGS = 10;
@@ -40,14 +40,20 @@ export default function ProfileExportCard({
 
   const [base64Image, setBase64Image] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  
+  // ▼ 検証用の追加：写真の準備ができたかを判定するステート
+  const [isImageReady, setIsImageReady] = useState<boolean>(!member?.photo_url);
 
   useEffect(() => {
     if (!member?.photo_url) {
       setBase64Image(null);
+      setIsImageReady(true);
       return;
     }
 
+    setIsImageReady(false);
     let isMounted = true;
+    
     const convertImageToBase64 = (url: string) => {
       return new Promise<string>((resolve, reject) => {
         const img = new Image();
@@ -70,8 +76,20 @@ export default function ProfileExportCard({
     };
 
     convertImageToBase64(member.photo_url)
-      .then(base64 => { if (isMounted) setBase64Image(base64); })
-      .catch((err) => { if (isMounted) setBase64Image(member.photo_url); });
+      .then(base64 => { 
+        if (isMounted) {
+          setBase64Image(base64);
+          // 変換完了後、フラグをtrueにする
+          setIsImageReady(true);
+        } 
+      })
+      .catch((err) => { 
+        console.warn("画像のBase64変換に失敗しました:", err);
+        if (isMounted) {
+          setBase64Image(member.photo_url);
+          setIsImageReady(true);
+        } 
+      });
 
     return () => { isMounted = false; };
   }, [member?.photo_url]);
@@ -82,7 +100,6 @@ export default function ProfileExportCard({
     setIsDownloading(true);
     
     try {
-      // 純粋に1回だけ実行（前回成功したロジック）
       const dataUrl = await toPng(element, { 
         pixelRatio: 2, 
         backgroundColor: '#ffffff'
@@ -90,7 +107,7 @@ export default function ProfileExportCard({
 
       const res = await fetch(dataUrl);
       const blob = await res.blob();
-      const fileName = member?.name ? `${member.name}_Test1.png` : 'Test1.png';
+      const fileName = member?.name ? `${member.name}_Test2.png` : 'Test2.png';
       const file = new File([blob], fileName, { type: 'image/png' });
 
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -98,7 +115,7 @@ export default function ProfileExportCard({
       if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: 'テスト画像',
+          title: 'テスト画像2',
         });
       } else {
         const link = document.createElement('a');
@@ -121,14 +138,16 @@ export default function ProfileExportCard({
       <button 
         type="button" 
         onClick={handleDownloadProfile}
-        disabled={isDownloading}
+        // ▼ 変更：写真の準備が終わるか、処理中の場合はボタンを押せないようにする
+        disabled={!isImageReady || isDownloading}
         className={buttonClassName}
       >
         {showIcon && <Share className="w-5 h-5" />}
-        <span>{isDownloading ? '処理中...' : buttonText}</span>
+        {/* ボタンのテキストで現在の状態を可視化 */}
+        <span>{!isImageReady ? '写真準備中...' : (isDownloading ? '処理中...' : buttonText)}</span>
       </button>
 
-      {/* 前回成功した opacity: 0.01 の配置 */}
+      {/* 前回と同じ、opacity: 0.01 の配置 */}
       <div 
         style={{
           position: 'fixed',
@@ -149,14 +168,10 @@ export default function ProfileExportCard({
               <div className="absolute inset-0 flex items-center justify-center text-gray-500">No Image</div>
             )}
             
-            {/* ▼ 削除：グラデーション (bg-gradient-to-t) ▼ */}
-            
             <div className="absolute bottom-0 left-0 w-full px-8 pb-10 text-white">
               <p className="text-lg font-bold text-gray-800 mb-1 tracking-widest">{member.furigana}</p>
               <h2 className="text-4xl font-bold mb-4 text-black">{member.name}</h2>
               <div className="flex gap-2 flex-wrap">
-                {/* ▼ 削除：Starアイコン ▼ */}
-                {member.is_core_member && <span className="bg-yellow-400 text-yellow-900 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 border border-yellow-500">コアメンバー</span>}
                 <span className="bg-black/50 text-xs font-bold px-3 py-1 rounded-full border border-gray-400">{member.attribute}</span>
                 <span className="bg-black/50 text-xs font-bold px-3 py-1 rounded-full border border-gray-400">{member.prefecture}{member.city && ` ${member.city}`}</span>
               </div>
@@ -166,12 +181,10 @@ export default function ProfileExportCard({
           <div className="flex-1 p-6 bg-gray-50 flex flex-col justify-between relative">
             <div className="flex justify-between items-end border-b-2 border-blue-600 pb-2 mb-3">
               <h1 className="text-2xl font-bold text-blue-900 tracking-wider">MEMBER PROFILE</h1>
-              {/* ▼ 削除：JYCロゴSVG ▼ */}
               <div className="h-12 font-bold text-blue-900 flex items-end">JYC LOGO</div>
             </div>
 
             <div className="mb-3">
-              {/* ▼ 削除：Starアイコン ▼ */}
               <h3 className="text-xs font-bold text-blue-600 mb-1 flex items-center gap-1">若者協議会で実現したいこと</h3>
               <div className="bg-white p-3 rounded-xl border border-gray-300 min-h-[90px] flex items-center">
                 <p className={`font-bold text-black break-words w-full ${getDynamicTextClass(member.goal, 'goal')}`}>{member.goal || '未設定'}</p>
@@ -213,7 +226,6 @@ export default function ProfileExportCard({
                   <p className={`font-bold text-black whitespace-pre-wrap break-all ${getDynamicTextClass((member.outside_activities||'') + (member.sns_links||''), 'free')}`}>
                     {member.outside_activities && <span>{member.outside_activities}</span>}
                     {member.outside_activities && member.sns_links && <br/>}
-                    {/* ▼ 削除：LinkIcon ▼ */}
                     {member.sns_links && <span className="text-blue-600 flex items-start gap-1"><span>{member.sns_links}</span></span>}
                     {!member.outside_activities && !member.sns_links && <span className="text-gray-500">未設定</span>}
                   </p>
