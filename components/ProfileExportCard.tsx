@@ -22,7 +22,6 @@ export default function ProfileExportCard({
   const [base64Image, setBase64Image] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  // 画像のBase64化（元々のロジックそのまま）
   useEffect(() => {
     if (!member?.photo_url) {
       setBase64Image(null);
@@ -64,7 +63,7 @@ export default function ProfileExportCard({
     setIsDownloading(true);
     
     try {
-      // ダブルレンダリング等は一切せず、純粋に1回だけ実行
+      // プログラム側での連続実行や待機は一切行わず、1回だけストレートに実行します
       const dataUrl = await toPng(element, { 
         pixelRatio: 2, 
         backgroundColor: '#ffffff'
@@ -111,20 +110,31 @@ export default function ProfileExportCard({
       </button>
 
       {/* 
-        【原因切り分け用の極小レイアウト】
-        複雑なCSS、グラデーション、テキストをすべて排除し、
-        純粋に「プロフィール写真1枚（360x360）」だけを描画対象にする 
+        【テスト用配置】
+        -left-[9999px] をやめ、画面の左上に fixed で配置。
+        Safariに「画面内に存在する」と認識させるため、opacity を 0.01 に設定。
       */}
-      <div className="absolute -left-[9999px] -top-[9999px] pointer-events-none select-none">
-        <div id="profile-card-export" className="w-[360px] h-[360px] bg-gray-200 flex items-center justify-center overflow-hidden">
+      <div 
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          zIndex: -9999,
+          opacity: 0.01,
+          pointerEvents: 'none',
+          transform: 'translateZ(0)' /* GPUレンダリングを強制 */
+        }}
+      >
+        <div id="profile-card-export" style={{ width: '360px', height: '360px', backgroundColor: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
           {base64Image ? (
             <img 
               src={base64Image} 
               alt="Test" 
-              className="w-full h-full object-cover" 
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              decoding="sync" /* 読み込みの遅延を防ぐ */
             />
           ) : (
-            <User className="w-32 h-32 text-gray-500" />
+            <User size={128} color="#6b7280" />
           )}
         </div>
       </div>
