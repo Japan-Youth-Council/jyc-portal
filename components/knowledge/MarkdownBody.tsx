@@ -1,10 +1,10 @@
 'use client';
 
-import { isValidElement, ReactNode } from 'react';
+import { isValidElement, MouseEvent, ReactNode } from 'react';
 import ReactMarkdown, { Components, defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { replaceWikiLinksToMarkdown, uniqueHeadingId } from '@/lib/knowledge';
+import { replaceWikiLinksToViewMarkdown, uniqueHeadingId, wikiIdFromHref } from '@/lib/knowledge';
 import { Knowledge } from '@/types/database';
 
 function getNodeText(node: ReactNode): string {
@@ -16,7 +16,7 @@ function getNodeText(node: ReactNode): string {
 }
 
 function urlTransform(url: string) {
-  if (url.startsWith('wiki:')) return url;
+  if (url.startsWith('wiki:') || url.startsWith('#wiki-')) return url;
   return defaultUrlTransform(url);
 }
 
@@ -43,14 +43,19 @@ export default function MarkdownBody({
     return Heading;
   };
 
+  const openWiki = (event: MouseEvent<HTMLAnchorElement>, target: Knowledge) => {
+    event.preventDefault();
+    onWikiLink?.(target);
+  };
+
   const components: Components = {
     h1: heading('h1'),
     h2: heading('h2'),
     h3: heading('h3'),
     a: ({ href, children }) => {
-      if (href?.startsWith('wiki:')) {
-        const id = Number(href.slice(5));
-        const target = Number.isFinite(id) ? knowledges.find((item) => item.id === id) : null;
+      const wikiId = wikiIdFromHref(href);
+      if (wikiId != null) {
+        const target = knowledges.find((item) => Number(item.id) === wikiId) ?? null;
         if (!target) {
           return <span className="wiki-broken-link">{children}</span>;
         }
@@ -58,13 +63,13 @@ export default function MarkdownBody({
           return <span className="wiki-internal-link">{children}</span>;
         }
         return (
-          <button
-            type="button"
-            onClick={() => onWikiLink(target)}
+          <a
+            href={`#wiki-${wikiId}`}
             className="wiki-internal-link"
+            onClick={(event) => openWiki(event, target)}
           >
             {children}
-          </button>
+          </a>
         );
       }
       const external = href?.startsWith('http');
@@ -90,7 +95,7 @@ export default function MarkdownBody({
         urlTransform={urlTransform}
         components={components}
       >
-        {replaceWikiLinksToMarkdown(content, knowledges)}
+        {replaceWikiLinksToViewMarkdown(content, knowledges)}
       </ReactMarkdown>
     </div>
   );

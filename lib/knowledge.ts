@@ -226,6 +226,36 @@ export function replaceWikiLinksToMarkdown(markdown: string, knowledges: Knowled
   );
 }
 
+export function replaceWikiLinksToViewMarkdown(markdown: string, knowledges: Knowledge[]): string {
+  const withTokens = replaceWikiLinksToMarkdown(markdown, knowledges);
+  return mapNonFenceLines(withTokens, (line) =>
+    line
+      .replace(/\[([^\]]+)\]\(<?wiki:(\d+|missing)>?(?:\s+"[^"]*")?\)/g, (_full, title, id) => {
+        if (id === 'missing') return String(title);
+        return `[${title}](#wiki-${id})`;
+      })
+      .replace(/<a\b[^>]*\bhref=["']wiki:(\d+|missing)["'][^>]*>(.*?)<\/a>/gi, (_full, id, title) => {
+        const label = String(title).replace(/<[^>]+>/g, '').replace(/\]/g, '');
+        if (id === 'missing') return label;
+        return `[${label}](#wiki-${id})`;
+      })
+  );
+}
+
+export function wikiIdFromHref(href?: string | null): number | null {
+  if (!href) return null;
+  let decoded = href;
+  try {
+    decoded = decodeURIComponent(href);
+  } catch {
+    decoded = href;
+  }
+  const match = decoded.match(/(?:#wiki-|wiki:\/\/|wiki:)(\d+)\s*$/i);
+  if (!match) return null;
+  const id = Number(match[1]);
+  return Number.isFinite(id) ? id : null;
+}
+
 function wikiTokenFromHref(id: string, title: string): string {
   const label = title.replace(/<[^>]+>/g, '').replace(/[\[\]]/g, '').trim() || '無題のドキュメント';
   if (id === 'missing') return `[[${label}]]`;

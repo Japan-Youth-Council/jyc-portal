@@ -99,9 +99,11 @@ body {
 .wiki-prose .wiki-internal-link {
   font: inherit;
   padding: 0;
+  margin: 0;
   background: none;
   border: none;
   cursor: pointer;
+  display: inline;
 }
 
 .wiki-prose .wiki-broken-link {
