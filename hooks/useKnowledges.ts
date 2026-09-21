@@ -79,6 +79,24 @@ export function useKnowledges() {
     return { error: null, data: data as PolicyCategory };
   };
 
+  const updateCategory = async (id: number, name: string) => {
+    const authorError = ensureAuthor();
+    if (authorError) return { error: authorError, data: null as PolicyCategory | null };
+    const trimmed = name.trim();
+    if (!trimmed) return { error: '名前を入力してください。', data: null as PolicyCategory | null };
+
+    const { data, error } = await supabase
+      .from('policy_categories')
+      .update({ name: trimmed })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) return { error: error.message, data: null as PolicyCategory | null };
+    setCategories((prev) => prev.map((item) => (item.id === id ? data : item)));
+    return { error: null, data: data as PolicyCategory };
+  };
+
   const writeKnowledge = async (
     includeTags: boolean,
     payload: Record<string, unknown>,
@@ -161,6 +179,7 @@ export function useKnowledges() {
     isLoading,
     loadError,
     addCategory,
+    updateCategory,
     addKnowledge,
     updateKnowledge,
     deleteKnowledge,

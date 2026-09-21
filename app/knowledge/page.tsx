@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { BookOpen, PanelLeft, Plus, Save, User, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { BookOpen, PanelLeft, Pencil, Plus, Save, User, X } from 'lucide-react';
 import { useKnowledges } from '@/hooks/useKnowledges';
 import {
   collectTags,
@@ -37,6 +37,7 @@ export default function KnowledgePage() {
     isLoading,
     loadError,
     addCategory,
+    updateCategory,
     addKnowledge,
     updateKnowledge,
     deleteKnowledge,
@@ -53,6 +54,9 @@ export default function KnowledgePage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saveError, setSaveError] = useState('');
   const [collapsedMajors, setCollapsedMajors] = useState<Set<number>>(new Set());
+  const [isEditingMinor, setIsEditingMinor] = useState(false);
+  const [minorNameDraft, setMinorNameDraft] = useState('');
+  const [isSavingMinor, setIsSavingMinor] = useState(false);
 
   const tags = useMemo(() => collectTags(knowledges), [knowledges]);
   const expandedMajors = useMemo(() => {
@@ -211,6 +215,34 @@ export default function KnowledgePage() {
     setSelectedId(null);
     setIsEditing(false);
     setDraft(null);
+  };
+
+  useEffect(() => {
+    setIsEditingMinor(false);
+    setMinorNameDraft('');
+  }, [selectedMinorId, searchQuery, selectedTag]);
+
+  const startEditMinor = () => {
+    const name = getCategoryPath(categories, selectedMinorId).minor?.name || '';
+    setMinorNameDraft(name);
+    setIsEditingMinor(true);
+  };
+
+  const handleSaveMinor = async () => {
+    if (!selectedMinorId) return;
+    const trimmed = minorNameDraft.trim();
+    if (!trimmed) {
+      alert('小項目名を入力してください。');
+      return;
+    }
+    setIsSavingMinor(true);
+    const { error } = await updateCategory(selectedMinorId, trimmed);
+    setIsSavingMinor(false);
+    if (error) {
+      alert(error);
+      return;
+    }
+    setIsEditingMinor(false);
   };
 
   const showingList = !displayed && (isBrowsingAll || selectedMinorId != null);
@@ -376,9 +408,53 @@ export default function KnowledgePage() {
                     <p className="text-xs font-bold text-gray-400">
                       {getCategoryPath(categories, selectedMinorId).major?.name}
                     </p>
-                    <h2 className="text-lg md:text-2xl font-bold text-gray-800 truncate">
-                      {getCategoryPath(categories, selectedMinorId).minor?.name}
-                    </h2>
+                    {isEditingMinor ? (
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                        <input
+                          autoFocus
+                          type="text"
+                          value={minorNameDraft}
+                          onChange={(e) => setMinorNameDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.nativeEvent.isComposing) return;
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleSaveMinor();
+                            }
+                            if (e.key === 'Escape') setIsEditingMinor(false);
+                          }}
+                          className="min-w-0 flex-1 border border-gray-300 rounded-md px-3 py-1.5 text-lg md:text-2xl font-bold text-gray-800 outline-none focus:border-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingMinor(false)}
+                          className="px-3 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-md inline-flex items-center gap-1"
+                        >
+                          <X className="w-4 h-4" /> キャンセル
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveMinor}
+                          disabled={isSavingMinor}
+                          className="px-3 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 rounded-md inline-flex items-center gap-1.5"
+                        >
+                          <Save className="w-4 h-4" /> {isSavingMinor ? '保存中...' : '保存'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 min-w-0">
+                        <h2 className="text-lg md:text-2xl font-bold text-gray-800 truncate">
+                          {getCategoryPath(categories, selectedMinorId).minor?.name}
+                        </h2>
+                        <button
+                          type="button"
+                          onClick={startEditMinor}
+                          className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded-md"
+                        >
+                          <Pencil className="w-3.5 h-3.5" /> 編集
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
