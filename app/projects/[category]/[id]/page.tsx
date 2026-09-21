@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { Edit2, Save, X, Plus, ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import ProjectMarkdownEditor, { ProjectMarkdownView } from '@/components/projects/ProjectMarkdownEditor';
 
 export default function CategoryProjectPage({ params }: { params: Promise<{ category: string, id: string }> }) {
   const resolvedParams = use(params);
@@ -171,16 +172,18 @@ export default function CategoryProjectPage({ params }: { params: Promise<{ cate
 
           {isEditingDesc ? (
             <div className="space-y-3">
-              <textarea value={editDescText} onChange={(e) => setEditDescText(e.target.value)} placeholder="目的、活動内容、Slack等のURLを自由に入力してください。" rows={6} className="w-full border border-gray-300 p-3 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none resize-y" />
+              <ProjectMarkdownEditor
+                value={editDescText}
+                onChange={setEditDescText}
+                placeholder="目的、活動内容、Slackや議事録のリンクを入力してください。"
+              />
               <div className="flex justify-end gap-2">
                 <button onClick={() => { setIsEditingDesc(false); setEditDescText(parentData.description || ''); }} className="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-lg">キャンセル</button>
                 <button onClick={handleSaveDesc} disabled={isSaving} className="px-5 py-2 text-sm font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"><Save className="w-4 h-4"/> 保存</button>
               </div>
             </div>
           ) : (
-            <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-              {parentData.description ? parentData.description : <span className="text-gray-400 italic">概要やリンクはまだ設定されていません。</span>}
-            </div>
+            <ProjectMarkdownView content={parentData.description} />
           )}
         </section>
 

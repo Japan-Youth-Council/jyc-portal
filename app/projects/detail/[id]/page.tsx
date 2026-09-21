@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { Edit2, Save, ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import ProjectMarkdownEditor, { ProjectMarkdownView } from '@/components/projects/ProjectMarkdownEditor';
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -147,12 +148,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
           {isEditingDesc ? (
             <div className="space-y-3">
-              <textarea 
+              <ProjectMarkdownEditor
                 value={editDescText}
-                onChange={(e) => setEditDescText(e.target.value)}
-                placeholder="小プロジェクトの目的、活動内容、SlackチャンネルのURL、議事録のリンクなどを自由に入力してください。"
-                rows={6}
-                className="w-full border border-gray-300 p-3 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none resize-y"
+                onChange={setEditDescText}
+                placeholder="目的、活動内容、Slackや議事録のリンクを入力してください。"
               />
               <div className="flex justify-end gap-2">
                 <button onClick={() => { setIsEditingDesc(false); setEditDescText(projectData.description || ''); }} className="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition">キャンセル</button>
@@ -160,9 +159,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
           ) : (
-            <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-              {projectData.description ? projectData.description : <span className="text-gray-400 italic">概要やリンクはまだ設定されていません。</span>}
-            </div>
+            <ProjectMarkdownView content={projectData.description} />
           )}
         </section>
         

@@ -161,3 +161,50 @@ body {
 .wiki-prose em {
   font-style: italic;
 }
+
+.wiki-prose-compact {
+  font-size: 0.875rem;
+}
+
+.wiki-prose-compact h1 {
+  font-size: 1.25rem;
+  margin: 1rem 0 0.5rem;
+}
+
+.wiki-prose-compact h2 {
+  font-size: 1.05rem;
+  margin: 0.9rem 0 0.45rem;
+}
+
+.wiki-prose-compact h3 {
+  font-size: 0.95rem;
+  margin: 0.8rem 0 0.35rem;
+}
+
+.wiki-prose-compact p,
+.wiki-prose-compact ul,
+.wiki-prose-compact ol {
+  margin: 0.5rem 0;
+}
+
+.project-wysiwyg .tiptap {
+  outline: none;
+  min-height: 240px;
+  padding: 0.75rem;
+  cursor: text;
+  color: #374151;
+}
+
+.project-wysiwyg .tiptap p.is-editor-empty:first-child::before,
+.project-wysiwyg .tiptap p.is-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: #9ca3af;
+  pointer-events: none;
+  font-style: italic;
+}
+
+.project-wysiwyg .tiptap li p {
+  margin: 0.15rem 0;
+}

@@ -19,10 +19,14 @@ export default function MarkdownBody({
   content,
   knowledges = [],
   onWikiLink,
+  className,
+  emptyText = '本文はまだありません。',
 }: {
   content: string;
   knowledges?: Knowledge[];
   onWikiLink?: (knowledge: Knowledge) => void;
+  className?: string;
+  emptyText?: string;
 }) {
   const used = new Map<string, number>();
   const heading = (Tag: 'h1' | 'h2' | 'h3') => {
@@ -71,11 +75,11 @@ export default function MarkdownBody({
   };
 
   if (!content.trim()) {
-    return <p className="text-gray-400">本文はまだありません。</p>;
+    return <p className="text-gray-400 italic">{emptyText}</p>;
   }
 
   return (
-    <div className="wiki-prose">
+    <div className={className ? `wiki-prose ${className}` : 'wiki-prose'}>
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
         {replaceWikiLinksToMarkdown(content, knowledges)}
       </ReactMarkdown>
