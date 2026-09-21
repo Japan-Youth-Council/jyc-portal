@@ -146,7 +146,7 @@ export default function KnowledgeSidebar({
                       }`}
                     >
                       <FileText className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                      <span className="truncate">{knowledge.title}</span>
+                      <span className="break-words">{knowledge.title}</span>
                     </button>
                   </li>
                 ))}
@@ -200,8 +200,8 @@ export default function KnowledgeSidebar({
                         selectedMajorId === major.id ? 'text-blue-800' : 'text-gray-700 hover:bg-gray-100'
                       }`}
                     >
-                      {expanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                      <span className="truncate">{major.name}</span>
+                      {expanded ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+                      <span className="break-words text-left">{major.name}</span>
                     </button>
                     <button
                       type="button"
@@ -236,33 +236,31 @@ export default function KnowledgeSidebar({
                             <button
                               type="button"
                               onClick={() => onSelectMinor(major.id, minor.id)}
-                              className={`w-full text-left px-2 py-1 rounded text-sm ${
+                              className={`w-full text-left px-2 py-1 rounded text-sm break-words ${
                                 selected ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-600 hover:bg-gray-100'
                               }`}
                             >
                               {minor.name}
                             </button>
-                            {selected && (
-                              <ul className="mt-0.5 mb-1 space-y-0.5">
-                                {docs.length === 0 && (
-                                  <li className="text-[11px] text-gray-400 px-2 py-1">ドキュメントなし</li>
-                                )}
-                                {docs.map((doc) => (
-                                  <li key={doc.id}>
-                                    <button
-                                      type="button"
-                                      onClick={() => onSelectKnowledge(doc)}
-                                      className={`w-full text-left px-2 py-1 rounded text-xs flex items-start gap-1 ${
-                                        selectedId === doc.id ? 'bg-blue-100 text-blue-800 font-bold' : 'text-gray-600 hover:bg-gray-50'
-                                      }`}
-                                    >
-                                      <FileText className="w-3 h-3 mt-0.5 shrink-0" />
-                                      <span className="truncate">{doc.title}</span>
-                                    </button>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
+                            <ul className="mt-0.5 mb-1 space-y-0.5">
+                              {docs.length === 0 && selected && (
+                                <li className="text-[11px] text-gray-400 px-2 py-1">ドキュメントなし</li>
+                              )}
+                              {docs.map((doc) => (
+                                <li key={doc.id}>
+                                  <button
+                                    type="button"
+                                    onClick={() => onSelectKnowledge(doc)}
+                                    className={`w-full text-left px-2 py-1 rounded text-xs flex items-start gap-1 ${
+                                      selectedId === doc.id ? 'bg-blue-100 text-blue-800 font-bold' : 'text-gray-600 hover:bg-gray-50'
+                                    }`}
+                                  >
+                                    <FileText className="w-3 h-3 mt-0.5 shrink-0" />
+                                    <span className="break-words">{doc.title}</span>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
                           </div>
                         );
                       })}
