@@ -1,7 +1,7 @@
 'use client';
 
 import { isValidElement, ReactNode } from 'react';
-import ReactMarkdown, { Components } from 'react-markdown';
+import ReactMarkdown, { Components, defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { replaceWikiLinksToMarkdown, uniqueHeadingId } from '@/lib/knowledge';
@@ -13,6 +13,11 @@ function getNodeText(node: ReactNode): string {
   if (Array.isArray(node)) return node.map(getNodeText).join('');
   if (isValidElement<{ children?: ReactNode }>(node)) return getNodeText(node.props.children);
   return '';
+}
+
+function urlTransform(url: string) {
+  if (url.startsWith('wiki:')) return url;
+  return defaultUrlTransform(url);
 }
 
 export default function MarkdownBody({
@@ -80,7 +85,11 @@ export default function MarkdownBody({
 
   return (
     <div className={className ? `wiki-prose ${className}` : 'wiki-prose'}>
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkBreaks]}
+        urlTransform={urlTransform}
+        components={components}
+      >
         {replaceWikiLinksToMarkdown(content, knowledges)}
       </ReactMarkdown>
     </div>
