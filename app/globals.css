@@ -187,16 +187,32 @@ body {
   margin: 0.5rem 0;
 }
 
-.project-wysiwyg .tiptap {
+.wysiwyg-editor .tiptap {
   outline: none;
-  min-height: 240px;
-  padding: 0.75rem;
   cursor: text;
   color: #374151;
 }
 
-.project-wysiwyg .tiptap p.is-editor-empty:first-child::before,
-.project-wysiwyg .tiptap p.is-empty:first-child::before {
+.wysiwyg-compact .tiptap {
+  min-height: 240px;
+  padding: 0.75rem;
+}
+
+.wysiwyg-fill {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.wysiwyg-fill .tiptap {
+  min-height: 100%;
+  padding: 1rem 1.5rem;
+  max-width: 48rem;
+  margin: 0 auto;
+}
+
+.wysiwyg-editor .tiptap p.is-editor-empty:first-child::before,
+.wysiwyg-editor .tiptap p.is-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;
   height: 0;
@@ -205,6 +221,17 @@ body {
   font-style: italic;
 }
 
-.project-wysiwyg .tiptap li p {
+.wysiwyg-editor .tiptap li p {
   margin: 0.15rem 0;
+}
+
+.wysiwyg-editor a[href^="wiki:"] {
+  color: #7c3aed;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.wysiwyg-editor a[href^="wiki:missing"] {
+  color: #9ca3af;
+  text-decoration-style: dashed;
 }

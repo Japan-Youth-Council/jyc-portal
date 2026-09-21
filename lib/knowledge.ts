@@ -225,3 +225,26 @@ export function replaceWikiLinksToMarkdown(markdown: string, knowledges: Knowled
     })
   );
 }
+
+function wikiTokenFromHref(id: string, title: string): string {
+  const label = title.replace(/<[^>]+>/g, '').replace(/[\[\]]/g, '').trim() || '無題のドキュメント';
+  if (id === 'missing') return `[[${label}]]`;
+  return `[[${id}:${label}]]`;
+}
+
+export function replaceMarkdownWikiHrefsToTokens(markdown: string): string {
+  return mapNonFenceLines(markdown, (line) =>
+    line
+      .replace(/\[([^\]]+)\]\(wiki:(\d+|missing)(?:\s+"[^"]*")?\)/g, (_full, title, id) =>
+        wikiTokenFromHref(String(id), String(title))
+      )
+      .replace(/<a\b[^>]*\bhref="wiki:(\d+|missing)"[^>]*>(.*?)<\/a>/gi, (_full, id, title) =>
+        wikiTokenFromHref(String(id), String(title))
+      )
+  );
+}
+
+export function formatWikiMarkdownLink(knowledge: Knowledge): string {
+  const title = knowledge.title.replace(/[\[\]]/g, '').trim() || '無題のドキュメント';
+  return `[${title.replace(/\]/g, '')}](wiki:${knowledge.id})`;
+}
