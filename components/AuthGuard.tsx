@@ -10,8 +10,12 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   useEffect(() => {
-    const publicPaths = ['/', '/privacy', '/terms','/toolbox'];
+    // 誰でも（ログイン・未ログイン問わず）アクセスできるパス
+    const publicPaths = ['/', '/privacy', '/terms', '/toolbox'];
     const isPublicPath = publicPaths.includes(pathname);
+
+    // ログイン済みのユーザーがアクセスした際、強制的に /home に飛ばす「ゲスト用」パス
+    const guestOnlyPaths = ['/'];
 
     // プロフィールの必須項目がすべて埋まっているか判定する関数
     const checkProfileComplete = (profile: any) => {
@@ -21,7 +25,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         profile.furigana &&
         profile.attribute &&
         profile.prefecture &&
-        profile.goal // ここをgoalに修正しました
+        profile.goal
       );
     };
 
@@ -37,7 +41,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // DBから必須項目を取得（goalを含める）
+      // DBから必須項目を取得
       const { data: profile } = await supabase
         .from('profiles')
         .select('id, name, furigana, attribute, prefecture, goal')
@@ -49,7 +53,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       // 必須項目が1つでも欠けている場合
       if (!isComplete) {
         if (pathname !== '/setup-profile') {
-          router.replace('/setup-profile'); // 登録画面へ強制送還
+          router.replace('/setup-profile'); 
         } else {
           setIsAuthorized(true);
         }
@@ -57,7 +61,8 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       }
 
       // すべて登録済み（既存ユーザー）の場合
-      if (isPublicPath || pathname === '/setup-profile') {
+      // ★修正: isPublicPath 全体ではなく guestOnlyPaths ( / のみ ) を判定する
+      if (guestOnlyPaths.includes(pathname) || pathname === '/setup-profile') {
         router.replace('/home'); 
         return;
       }
@@ -71,6 +76,8 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       if (!session) {
         if (!publicPaths.includes(pathname)) {
           router.replace('/'); 
+        } else {
+          setIsAuthorized(true);
         }
       } else {
         const { data: profile } = await supabase
@@ -83,7 +90,8 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
         if (!isComplete && pathname !== '/setup-profile') {
           router.replace('/setup-profile');
-        } else if (isComplete && (publicPaths.includes(pathname) || pathname === '/setup-profile')) {
+        } else if (isComplete && (guestOnlyPaths.includes(pathname) || pathname === '/setup-profile')) {
+          // ★修正: ここも guestOnlyPaths に変更
           router.replace('/home');
         } else {
           setIsAuthorized(true);
