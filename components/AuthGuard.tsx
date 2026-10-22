@@ -10,7 +10,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const [isAuthorized, setIsAuthorized] = useState(false);
 
   useEffect(() => {
-    const publicPaths = ['/', '/privacy', '/terms'];
+    const publicPaths = ['/', '/privacy', '/terms','/toolbox'];
     const isPublicPath = publicPaths.includes(pathname);
 
     // プロフィールの必須項目がすべて埋まっているか判定する関数
