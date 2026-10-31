@@ -1,13 +1,17 @@
 "use client";
 
 import { useState } from 'react';
-import { Video, Copy, Check, Loader2, Info, AlertCircle } from 'lucide-react';
+import { Video, Copy, Check, Loader2, Info, AlertCircle, FileText } from 'lucide-react';
 
-export default function ToolboxPage() {
+export default function OrgMembersInfoPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [meetUrl, setMeetUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // ★ここにGoogleドライブのファイルIDを設定してください
+  const pdfFileId = "1dCXXV2yvuQO9D_2rIR1_5dmkVUPoMyh0";
+  const pdfEmbedUrl = `https://drive.google.com/file/d/${pdfFileId}/preview`;
 
   const handleGenerateMeet = async () => {
     setIsLoading(true);
@@ -43,14 +47,41 @@ export default function ToolboxPage() {
   };
 
   return (
-    <div className="p-6 md:p-10 max-w-3xl mx-auto space-y-8">
+    <div className="p-6 md:p-10 max-w-5xl mx-auto space-y-10">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Toolbox</h1>
+        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">団体会員Info</h1>
       </div>
 
+      {/* ============================== */}
+      {/* 上段: PDF表示エリア */}
+      {/* ============================== */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6 md:p-8 shadow-sm flex flex-col h-full">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg shrink-0">
+            <FileText className="w-6 h-6" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 leading-tight">
+            団体会員ネットワーク<br />
+            グラウンドルール・諸規定
+          </h2>
+        </div>
+        
+        <div className="flex-grow w-full bg-gray-50 rounded-lg overflow-hidden border border-gray-200 shadow-inner mt-4">
+          <iframe
+            src={pdfEmbedUrl}
+            className="w-full h-full min-h-[400px] md:min-h-[500px]"
+            title="団体会員ネットワーク グラウンドルール・諸規定"
+            allow="autoplay"
+          ></iframe>
+        </div>
+      </div>
+
+      {/* ============================== */}
+      {/* 下段: Meet発行エリア */}
+      {/* ============================== */}
       <div className="bg-white border border-gray-200 rounded-xl p-6 md:p-8 shadow-sm flex flex-col">
         <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+          <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0">
             <Video className="w-6 h-6" />
           </div>
           <h2 className="text-xl font-bold text-gray-800">Google Meet 発行</h2>
@@ -60,7 +91,7 @@ export default function ToolboxPage() {
           Google Meetリンクを自動発行します。時間制限なく利用可能です。
         </p>
 
-        <div className="space-y-5">
+        <div className="space-y-5 max-w-3xl">
           {meetUrl && (
             <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 flex items-center justify-between gap-4">
               <span className="text-base text-blue-900 font-mono truncate">{meetUrl}</span>
@@ -136,7 +167,6 @@ export default function ToolboxPage() {
             </p>
           </div>
         </div>
-
       </div>
     </div>
   );

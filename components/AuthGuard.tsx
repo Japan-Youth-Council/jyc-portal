@@ -11,7 +11,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // 誰でも（ログイン・未ログイン問わず）アクセスできるパス
-    const publicPaths = ['/', '/privacy', '/terms', '/toolbox'];
+    const publicPaths = ['/', '/privacy', '/terms', '/orgmembers-info'];
     const isPublicPath = publicPaths.includes(pathname);
 
     // ログイン済みのユーザーがアクセスした際、強制的に /home に飛ばす「ゲスト用」パス
