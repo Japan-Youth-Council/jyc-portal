@@ -96,6 +96,8 @@ export default function Header() {
 
   if (isLoading || !user) return null;
   if (pathname === '/login') return null;
+  if (pathname === '/orgmembers-info') return null;
+
 
   const isActive = (path: string) => pathname === path;
 
