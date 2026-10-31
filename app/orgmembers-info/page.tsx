@@ -158,7 +158,7 @@ export default function OrgMembersInfoPage() {
               <AlertCircle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
               <p className="text-orange-800 text-xs leading-relaxed">
                 <span className="font-bold block mb-1 text-sm">利用できない機能</span>
-                本ツールで発行したURLでは「主催者管理機能」を持たないため、<span className="underline decoration-orange-300 underline-offset-2">ブレイクアウトルーム、録画、AI文字起こし機能、特定の参加者のマイクミュート強制機能</span> は使用できません。進行は参加者同士の自律的な管理をお願いします。
+                本ツールで発行したURLでは、<span className="underline decoration-orange-300 underline-offset-2">ブレイクアウトルーム、録画、AI文字起こし機能、特定の参加者のマイクミュート強制機能</span> は使用できません。進行は参加者同士の自律的な管理をお願いします。
               </p>
             </div>
 
