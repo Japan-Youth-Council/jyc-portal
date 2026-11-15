@@ -4,11 +4,66 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { MoreVertical, Trash2, GitMerge, Plus, Edit2, User, FileText, Link as LinkIcon, Building2, MapPin, X, Search, ChevronDown, ChevronRight, Globe, PanelLeft, Star } from 'lucide-react';
 
-type Target = { id: number; category: string; region: string | null; name: string; sort_order: number };
+type Target = {
+  id: number;
+  category: string;
+  region: string | null;
+  name: string;
+  sort_order: number;
+  furigana?: string | null;
+  political_party?: string | null;
+  relationship?: string | null;
+};
+
+const sortIndividualTargets = (a: Target, b: Target) => {
+  const keyA = (a.furigana?.trim() || a.name).trim();
+  const keyB = (b.furigana?.trim() || b.name).trim();
+  return keyA.localeCompare(keyB, 'ja', { sensitivity: 'base' });
+};
+
+const sortTargetsForCategory = (category: string, list: Target[]) => {
+  if (category === '個人') return [...list].sort(sortIndividualTargets);
+  return [...list].sort((a, b) => a.sort_order - b.sort_order);
+};
 type ContactRecord = { id: number; target_id: number; date: string; title: string; content: string; jyc_attendees: any; target_attendees: string[]; linked_target_ids: number[]; document_urls: string[]; minutes_url: string; hp_article_url: string; author_name: string; created_at: string };
 type Profile = { id: string; name: string; furigana?: string; attribute?: string; prefecture?: string; city?: string; photo_url?: string; is_core_member?: boolean };
 
 const CATEGORIES = ['国政', '中央行政', '地方', '個人', 'その他'];
+
+function PersonalInfoField({
+  label,
+  value,
+  placeholder,
+  onSave,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onSave: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+
+  return (
+    <div>
+      <label className="block text-xs font-bold text-gray-500 mb-1">{label}</label>
+      <input
+        type="text"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={() => {
+          if (draft !== value) onSave(draft.trim());
+        }}
+        onKeyDown={e => {
+          if (e.nativeEvent.isComposing) return;
+          if (e.key === 'Enter') e.currentTarget.blur();
+        }}
+        placeholder={placeholder}
+        className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:border-blue-500 bg-gray-50 focus:bg-white"
+      />
+    </div>
+  );
+}
 
 export default function ContactsPage() {
   const [user, setUser] = useState<any>(null);
@@ -25,6 +80,7 @@ export default function ContactsPage() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<ContactRecord[]>([]);
+  const [searchMatchedTargets, setSearchMatchedTargets] = useState<Target[]>([]);
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -65,20 +121,65 @@ export default function ContactsPage() {
   }, [activeTarget]);
 
   useEffect(() => {
-    if (searchQuery.trim()) {
-      const search = async () => {
-        const { data } = await supabase
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearchResults([]);
+      setSearchMatchedTargets([]);
+      return;
+    }
+
+    const search = async () => {
+      const [{ data: textRecords }, { data: matchedTargets }] = await Promise.all([
+        supabase
           .from('contact_records')
           .select('*')
-          .or(`title.ilike.%${searchQuery}%,content.ilike.%${searchQuery}%,jyc_attendees.cs.{${searchQuery}}`)
+          .or(`title.ilike.%${q}%,content.ilike.%${q}%`)
           .order('date', { ascending: false })
-          .order('created_at', { ascending: false });
-        if (data) setSearchResults(data);
-      };
-      search();
-    } else {
-      setSearchResults([]);
-    }
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('contact_targets')
+          .select('*')
+          .or(`name.ilike.%${q}%,furigana.ilike.%${q}%`),
+      ]);
+
+      const targets = matchedTargets || [];
+      setSearchMatchedTargets(targets);
+
+      const byId = new Map<number, ContactRecord>();
+      (textRecords || []).forEach(r => byId.set(r.id, r));
+
+      if (targets.length > 0) {
+        const ids = targets.map(t => t.id);
+        const [{ data: byTargetId }, { data: byLinked }] = await Promise.all([
+          supabase.from('contact_records').select('*').in('target_id', ids),
+          supabase.from('contact_records').select('*').overlaps('linked_target_ids', ids),
+        ]);
+        (byTargetId || []).forEach(r => byId.set(r.id, r));
+        (byLinked || []).forEach(r => byId.set(r.id, r));
+      }
+
+      const { data: recent } = await supabase
+        .from('contact_records')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(400);
+      (recent || [])
+        .filter(
+          r =>
+            r.target_attendees?.some((a: string) => a.includes(q)) ||
+            (Array.isArray(r.jyc_attendees) &&
+              r.jyc_attendees.some((item: unknown) => String(item).replace(/[\[\]"]/g, '').includes(q)))
+        )
+        .forEach(r => byId.set(r.id, r));
+
+      setSearchResults(
+        Array.from(byId.values()).sort((a, b) => {
+          const byDate = b.date.localeCompare(a.date);
+          return byDate !== 0 ? byDate : b.created_at.localeCompare(a.created_at);
+        })
+      );
+    };
+    search();
   }, [searchQuery]);
 
   const fetchTargets = async () => {
@@ -116,9 +217,25 @@ export default function ContactsPage() {
     }
   };
 
+  const patchTarget = (id: number, patch: Partial<Target>) => {
+    setTargets(prev => prev.map(t => (t.id === id ? { ...t, ...patch } : t)));
+    setActiveTarget(prev => (prev?.id === id ? { ...prev, ...patch } : prev));
+  };
+
+  const handleUpdateTargetField = async (
+    id: number,
+    fields: Partial<Pick<Target, 'name' | 'furigana' | 'political_party' | 'relationship'>>
+  ) => {
+    const { error } = await supabase.from('contact_targets').update(fields).eq('id', id);
+    if (error) {
+      alert('❌ 保存に失敗しました\n' + error.message);
+      return;
+    }
+    patchTarget(id, fields);
+  };
+
   const handleUpdateTargetName = async (id: number, newName: string) => {
-    await supabase.from('contact_targets').update({ name: newName }).eq('id', id);
-    setTargets(targets.map(t => t.id === id ? { ...t, name: newName } : t));
+    await handleUpdateTargetField(id, { name: newName });
     setEditingTargetId(null);
   };
 
@@ -350,10 +467,10 @@ export default function ContactsPage() {
   const renderTargetItem = (target: Target, cat: string) => (
     <li 
       key={target.id}
-      draggable
-      onDragStart={() => setDragId(target.id)}
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={() => handleDrop(target.id, cat)}
+      draggable={cat !== '個人'}
+      onDragStart={() => cat !== '個人' && setDragId(target.id)}
+      onDragOver={(e) => cat !== '個人' && e.preventDefault()}
+      onDrop={() => cat !== '個人' && handleDrop(target.id, cat)}
       className={`group relative flex items-center justify-between p-2 rounded cursor-pointer transition ${activeTarget?.id === target.id && !searchQuery ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-gray-100 text-gray-700'}`}
     >
       {editingTargetId === target.id ? (
@@ -517,7 +634,7 @@ export default function ContactsPage() {
             <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-400" />
             <input 
               type="text" 
-              placeholder="全履歴から検索 (件名等)..." 
+              placeholder="履歴・名前から検索..." 
               value={searchQuery}
               onChange={e => {
                 setSearchQuery(e.target.value);
@@ -554,7 +671,7 @@ export default function ContactsPage() {
                             </div>
                             {openRegions[region] && (
                               <ul className="border-l-2 border-gray-200 ml-1.5 pl-2 space-y-1 mt-1">
-                                {rTargets.sort((a,b)=>a.sort_order - b.sort_order).map(t => renderTargetItem(t, cat))}
+                                {sortTargetsForCategory(cat, rTargets).map(t => renderTargetItem(t, cat))}
                               </ul>
                             )}
                           </div>
@@ -563,7 +680,7 @@ export default function ContactsPage() {
                     </div>
                   ) : (
                     <ul className="space-y-1 pl-4 mb-4">
-                      {catTargets.sort((a,b)=>a.sort_order - b.sort_order).map(t => renderTargetItem(t, cat))}
+                      {sortTargetsForCategory(cat, catTargets).map(t => renderTargetItem(t, cat))}
                     </ul>
                   )
                 )}
@@ -589,9 +706,28 @@ export default function ContactsPage() {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 md:p-8">
-              <div className="max-w-3xl mx-auto">
-                {searchResults.length === 0 ? (
+              <div className="max-w-3xl mx-auto space-y-6">
+                {searchMatchedTargets.length > 0 && (
+                  <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                    <p className="text-xs font-bold text-gray-500 mb-3 flex items-center gap-1"><User className="w-3.5 h-3.5"/> 名前が一致するコンタクト先</p>
+                    <div className="flex flex-wrap gap-2">
+                      {searchMatchedTargets.map(t => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => { setActiveTarget(t); setSearchQuery(''); }}
+                          className="text-sm font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-100 px-3 py-1.5 rounded-lg transition"
+                        >
+                          [{t.category}] {t.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {searchResults.length === 0 && searchMatchedTargets.length === 0 ? (
                   <div className="text-center py-20 text-gray-400"><Search className="w-16 h-16 mx-auto mb-4 text-gray-200" /><p>一致する履歴がありません。</p></div>
+                ) : searchResults.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-6">上のコンタクト先を選ぶと履歴を表示できます。</p>
                 ) : (
                   <div className="relative border-l-2 border-blue-100 ml-3 md:ml-6 space-y-6 md:space-y-8 pb-8">
                     {searchResults.map(r => renderRecordCard(r, true))}
@@ -618,6 +754,34 @@ export default function ContactsPage() {
                 <Plus className="w-4 h-4" /> <span className="hidden md:inline">新規記録を追加</span><span className="md:hidden">追加</span>
               </button>
             </div>
+
+            {activeTarget.category === '個人' && (
+              <div className="bg-white border-b px-4 md:px-8 py-4 md:py-5 shadow-sm">
+                <div className="max-w-3xl mx-auto">
+                  <p className="text-xs font-bold text-gray-500 mb-3 flex items-center gap-1"><User className="w-3.5 h-3.5"/> 個人情報（リストの並び順にも利用）</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <PersonalInfoField
+                      label="ふりがな（任意）"
+                      value={activeTarget.furigana || ''}
+                      placeholder="やまだ たろう"
+                      onSave={v => handleUpdateTargetField(activeTarget.id, { furigana: v || null })}
+                    />
+                    <PersonalInfoField
+                      label="所属政党"
+                      value={activeTarget.political_party || ''}
+                      placeholder="例: ○○党"
+                      onSave={v => handleUpdateTargetField(activeTarget.id, { political_party: v || null })}
+                    />
+                    <PersonalInfoField
+                      label="今の関係性"
+                      value={activeTarget.relationship || ''}
+                      placeholder="例: 定期的に意見交換"
+                      onSave={v => handleUpdateTargetField(activeTarget.id, { relationship: v || null })}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto p-4 md:p-8">
               <div className="max-w-3xl mx-auto">
