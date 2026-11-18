@@ -87,6 +87,10 @@ export default function ContactsPage() {
   const [editingTargetId, setEditingTargetId] = useState<number | null>(null);
   const [menuTargetId, setMenuTargetId] = useState<number | null>(null);
   const [mergeData, setMergeData] = useState<{ from: number; to: number | null } | null>(null);
+  const [mergeSearchText, setMergeSearchText] = useState('');
+  const [showMergeSuggestions, setShowMergeSuggestions] = useState(false);
+  const [revealTargetId, setRevealTargetId] = useState<number | null>(null);
+  const targetItemRefs = useRef<Record<number, HTMLLIElement | null>>({});
   const [formData, setFormData] = useState<Partial<ContactRecord>>({});
   
   const [targetAttendees, setTargetAttendees] = useState<string[]>([]);
@@ -119,6 +123,23 @@ export default function ContactsPage() {
   useEffect(() => {
     if (activeTarget) fetchRecords(activeTarget.id);
   }, [activeTarget]);
+
+  useEffect(() => {
+    if (mergeData) {
+      setMergeSearchText('');
+      setShowMergeSuggestions(false);
+    }
+  }, [mergeData?.from]);
+
+  useEffect(() => {
+    if (revealTargetId == null) return;
+    const id = revealTargetId;
+    const timer = window.setTimeout(() => {
+      targetItemRefs.current[id]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      setRevealTargetId(null);
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [revealTargetId, openCategories, openRegions, targets]);
 
   useEffect(() => {
     const q = searchQuery.trim();
@@ -205,6 +226,30 @@ export default function ContactsPage() {
 
   const toggleCategory = (cat: string) => setOpenCategories(prev => ({ ...prev, [cat]: !prev[cat] }));
   const toggleRegion = (reg: string) => setOpenRegions(prev => ({ ...prev, [reg]: !prev[reg] }));
+
+  const selectTargetAndReveal = (target: Target) => {
+    setOpenCategories(prev => ({ ...prev, [target.category]: true }));
+    if (target.category === '地方') {
+      const regionKey = target.region || 'その他';
+      setOpenRegions(prev => ({ ...prev, [regionKey]: true }));
+    }
+    setActiveTarget(target);
+    setSearchQuery('');
+    setRevealTargetId(target.id);
+  };
+
+  const mergeCandidates =
+    mergeData == null
+      ? []
+      : targets.filter(t => {
+          if (t.id === mergeData.from) return false;
+          const q = mergeSearchText.trim().toLowerCase();
+          if (!q) return true;
+          return (
+            t.name.toLowerCase().includes(q) ||
+            (t.furigana?.toLowerCase().includes(q) ?? false)
+          );
+        });
 
   const handleAddTarget = async (category: string, region: string | null = null) => {
     const name = prompt('新しいコンタクト先の名前を入力してください');
@@ -467,6 +512,9 @@ export default function ContactsPage() {
   const renderTargetItem = (target: Target, cat: string) => (
     <li 
       key={target.id}
+      ref={el => {
+        targetItemRefs.current[target.id] = el;
+      }}
       draggable={cat !== '個人'}
       onDragStart={() => cat !== '個人' && setDragId(target.id)}
       onDragOver={(e) => cat !== '個人' && e.preventDefault()}
@@ -538,7 +586,7 @@ export default function ContactsPage() {
               
               {isSearchResult && targetInfo && (
                 <span 
-                  onClick={() => { setActiveTarget(targetInfo); setSearchQuery(''); }}
+                  onClick={() => selectTargetAndReveal(targetInfo)}
                   className="text-[10px] md:text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 border px-2 py-1 rounded cursor-pointer transition flex items-center gap-1"
                 >
                   {targetInfo.category === '個人' ? <User className="w-3 h-3"/> : <Building2 className="w-3 h-3"/>}
@@ -715,7 +763,7 @@ export default function ContactsPage() {
                         <button
                           key={t.id}
                           type="button"
-                          onClick={() => { setActiveTarget(t); setSearchQuery(''); }}
+                          onClick={() => selectTargetAndReveal(t)}
                           className="text-sm font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-100 px-3 py-1.5 rounded-lg transition"
                         >
                           [{t.category}] {t.name}
@@ -966,12 +1014,64 @@ export default function ContactsPage() {
             </p>
             <div className="mb-6">
               <label className="block text-xs font-bold text-gray-500 mb-1">統合先（残す方）を選択</label>
-              <select value={mergeData.to || ''} onChange={e => setMergeData({...mergeData, to: Number(e.target.value)})} className="w-full border p-2 rounded outline-none text-sm font-bold text-gray-700 bg-gray-50">
-                <option value="">-- 選択してください --</option>
-                {targets.filter(t => t.id !== mergeData.from).map(t => (
-                  <option key={t.id} value={t.id}>[{t.category}] {t.name}</option>
-                ))}
-              </select>
+              {mergeData.to != null && (() => {
+                const picked = targets.find(t => t.id === mergeData.to);
+                if (!picked) return null;
+                return (
+                  <div className="mb-2 text-sm font-bold text-blue-700 bg-blue-50 border border-blue-100 px-3 py-2 rounded flex justify-between items-center gap-2">
+                    <span className="truncate">[{picked.category}] {picked.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => setMergeData({ ...mergeData, to: null })}
+                      className="shrink-0 p-1 hover:bg-blue-100 rounded text-blue-600"
+                      aria-label="選択を解除"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })()}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={mergeSearchText}
+                  onChange={e => {
+                    setMergeSearchText(e.target.value);
+                    setShowMergeSuggestions(true);
+                  }}
+                  onFocus={() => setShowMergeSuggestions(true)}
+                  onBlur={() => window.setTimeout(() => setShowMergeSuggestions(false), 150)}
+                  placeholder="名前・ふりがなで検索..."
+                  className="w-full pl-8 pr-3 py-2 border rounded outline-none text-sm text-gray-700 bg-gray-50 focus:bg-white focus:border-blue-500"
+                />
+                {showMergeSuggestions && (
+                  <ul className="absolute z-10 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white border rounded-md shadow-lg py-1">
+                    {!mergeSearchText.trim() ? (
+                      <li className="px-3 py-2 text-xs text-gray-400">名前またはふりがなを入力してください</li>
+                    ) : mergeCandidates.length === 0 ? (
+                      <li className="px-3 py-2 text-xs text-gray-400">一致するコンタクト先がありません</li>
+                    ) : (
+                      mergeCandidates.slice(0, 40).map(t => (
+                        <li
+                          key={t.id}
+                          onMouseDown={e => e.preventDefault()}
+                          onClick={() => {
+                            setMergeData({ ...mergeData, to: t.id });
+                            setMergeSearchText('');
+                            setShowMergeSuggestions(false);
+                          }}
+                          className="px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 text-gray-700"
+                        >
+                          <span className="text-xs text-gray-400 font-bold mr-1">[{t.category}]</span>
+                          {t.name}
+                          {t.furigana ? <span className="text-xs text-gray-400 ml-1">({t.furigana})</span> : null}
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                )}
+              </div>
             </div>
             <div className="flex justify-end gap-3">
               <button onClick={() => setMergeData(null)} className="px-4 py-2 text-sm font-bold text-gray-500 hover:bg-gray-100 rounded">キャンセル</button>
